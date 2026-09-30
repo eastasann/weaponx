@@ -251,7 +251,7 @@ Google のアクセストークン(1時間有効)だけは、インスタンス�
 | `web` | 同上 | Vite の開発サーバー(:5173)。`/api` を `api:3000` へ転送 |
 | `tools` | 同上 | `bun install`・テスト・Lint・drizzle-kit などの単発コマンド。Dev Container もここにつなぐ |
 | `e2e` | `mcr.microsoft.com/playwright`(Node.js 入り) | Playwright。`e2e` プロファイルのときだけ起動 |
-| `ops` | `docker/ops.Dockerfile`(`google/cloud-sdk` + Terraform) | Terraform と gcloud。`ops` プロファイルのときだけ起動。gcloud の認証情報は名前付きボリュームに保存 |
+| `ops` | `docker/ops.Dockerfile`(`google/cloud-sdk` + Terraform + openssl) | Terraform・gcloud・秘密の値の生成(openssl)。`ops` プロファイルのときだけ起動。gcloud の認証情報は名前付きボリュームに保存 |
 
 **理由:** 利用者の希望。Bun・Node.js・Terraform の版を手元でそろえる手間が無くなり、CI(GitHub Actions)も同じ `make` のターゲットで同じコンテナを使うので、手元と CI の差が出ない。
 

@@ -229,7 +229,7 @@ gcloud logging read \
 
 | タスク | 頻度 | 手順 |
 |--------|------|------|
-| 依存パッケージ更新 | 月1回 | `bun update` → `make test` / `make e2e` → PR → リリース。Bun・PostgreSQL・Playwright・Terraform のイメージの版も見直す |
+| 依存パッケージ更新 | 月1回 | `make deps-update` → `make test` / `make e2e` → PR → リリース。Bun・PostgreSQL・Playwright・Terraform のイメージの版も見直す |
 | DBバックアップ確認 | 月1回 | コンソールで自動バックアップの一覧を確認。3か月に1回、ポイントインタイムリカバリの複製を作って開けるか試し、複製は消す |
 | エラーの棚卸し | 週1回 | Error Reporting の未解決のエラーを確認・対処 |
 | セキュリティの見直し | 月1回 | Cloud Armor の拒否のログ、ログイン失敗の件数を確認 |

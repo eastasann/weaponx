@@ -13,7 +13,7 @@
 | Docker(Docker Desktop または Docker Engine + Compose v2) | Compose v2.24 以上 | すべての開発環境を動かす |
 | make | macOS / Linux に標準のもの(Windows は WSL2 の中で使う) | コマンドの入口(8章) |
 | git | 2.40 以上 | ソース管理 |
-| VS Code + Dev Containers 拡張(任意) | 最新 | コンテナの中の依存でエディタの型チェック・Biome を動かす(`.devcontainer/`) |
+| VS Code + Dev Containers 拡張(推奨) | 最新 | コンテナの中の依存でエディタの型チェック・Biome を動かす(`.devcontainer/`)。手元のエディタのままだと `node_modules`(Linux 用)を使えないことがある |
 
 コンテナの中にあるもの(版はイメージで固定する。手元には入れない):
 
@@ -22,7 +22,7 @@
 | Bun | `docker/dev.Dockerfile` と `package.json` の `packageManager` | API・画面・テスト・drizzle-kit |
 | Node.js | `compose.yaml` の `e2e` のイメージ(`mcr.microsoft.com/playwright`) | Playwright |
 | PostgreSQL 16 | `compose.yaml` の `db` | 開発用・テスト用 DB |
-| Terraform・gcloud | `docker/ops.Dockerfile` | インフラ(5章)・初回のクラウド設定 |
+| Terraform・gcloud・openssl | `docker/ops.Dockerfile` | インフラ(5章)・初回のクラウド設定・秘密の値の生成 |
 
 ### アカウント(デプロイ時に必要。ローカル開発は不要)
 
@@ -234,8 +234,8 @@ make test ARGS="apps/api/test/documents.test.ts"
 # E2E(Playwright。DB・API・画面をテスト用の設定で起動して流す)
 make e2e
 
-# E2E を画面付きで確かめる(レポートを http://localhost:9323 で開く)
-make e2e ARGS="--ui-port=9323"
+# 直前の E2E のレポートとトレースを見る(e2e のコンテナが http://localhost:9323 で配信する)
+make e2e-report
 ```
 
 テストの方針とカバレッジの目標は `docs/02-01_system-design-doc.md` 10章。
@@ -254,6 +254,7 @@ make e2e ARGS="--ui-port=9323"
 | `make build` | 全パッケージビルド(画面の静的ファイルと API のイメージ) |
 | `make test` | 単体・結合テスト実行 |
 | `make e2e` | E2E テスト実行 |
+| `make e2e-report` | 直前の E2E のレポートを http://localhost:9323 で開く |
 | `make lint` | Linter実行(Biome) |
 | `make format` | Formatter実行(Biome) |
 | `make typecheck` | 型チェック(`tsc --noEmit`、全ワークスペース) |
@@ -270,11 +271,13 @@ make e2e ARGS="--ui-port=9323"
 | `make ops-login` / `make ops-shell` | gcloud のログイン / ops のコンテナのシェル |
 | `make tf-init` / `make tf-plan` / `make tf-apply` | Terraform |
 | `make doc-lint` | ドキュメントと実体の整合検査(`scripts/doc-lint.sh --docs`) |
+| `make shell` | `tools` のコンテナのシェル(Bun・drizzle-kit などを直接使うとき) |
+| `make deps-update` | 依存パッケージを更新する(`tools` のコンテナで実行) |
 | `make clean` | コンテナ・ボリューム・`node_modules`・ビルド成果物を消す |
 
 ```makefile
 # 例: 各ターゲットは docker compose の実コマンドへ委譲する薄いラッパー
-.PHONY: setup dev stop build test e2e lint format typecheck tokens db-up db-push db-generate db-migrate db-seed db-reset db-studio db-psql bootstrap-admin ops-login ops-shell tf-init tf-plan tf-apply doc-lint clean
+.PHONY: setup dev stop build test e2e e2e-report lint format typecheck tokens db-up db-push db-generate db-migrate db-seed db-reset db-studio db-psql bootstrap-admin shell deps-update ops-login ops-shell tf-init tf-plan tf-apply doc-lint clean
 
 RUN := docker compose run --rm tools
 
@@ -354,10 +357,11 @@ fix/xxx    ──squash──▶   │
 | `make dev` でポートが使用中(5432 / 3000 / 5173 / 4983) | 手元で動いている PostgreSQL や別の開発サーバーを止める。どうしても変えるときは `compose.yaml` の公開ポートを変える |
 | Mac で保存しても画面・API が再読み込みされない | Docker Desktop の設定でファイル共有を VirtioFS にする。それでも検知しないときは `.env` に `WATCH_POLLING=true` を足して `make dev` をやり直す(Vite と `bun --watch` がポーリングに切り替わる) |
 | 依存が壊れた・手元で `bun install` を実行してしまった | `make clean` のあと `make setup`。`node_modules` はコンテナ(Linux)用なので、手元では依存をインストールしない |
+| 手元の VS Code で Biome・型チェックが動かない | `node_modules` は Linux 用なので、手元のエディタからは使えないことがある。Dev Container(「Reopen in Container」)で開く |
 | Linux で、コンテナが作ったファイルの持ち主が root になる | `.env` に `UID` と `GID`(`id -u` / `id -g` の値)を入れる。`compose.yaml` はこれでコンテナの利用者を合わせる |
 | ログイン画面に「開発用ログイン」が出ない | `.env` の `DEV_LOGIN_ENABLED=true` と `NODE_ENV=development` を確かめる |
 | マイグレーションが失敗する・DB の状態がおかしい | `make db-reset`(開発用 DB のデータは消える) |
 | 本物の Google で `redirect_uri_mismatch` | OAuth クライアントのリダイレクト URI が `http://localhost:5173/api/auth/google/callback` と完全に一致しているか確かめる(6章) |
 | 本物の Google で Picker が開かない・API キーのエラー | API キーのウェブサイト制限に `http://localhost:5173/*` があるか、Google Picker API が有効か確かめる |
 | CI で `tokens.css` の差分エラー | `docs/06_design-tokens.json` を直した後に `make tokens` を実行してコミットする |
-| E2E がローカルで失敗し、原因が分からない | `make e2e` の後、`e2e/playwright-report/` のトレースを開く |
+| E2E がローカルで失敗し、原因が分からない | `make e2e-report` でレポートを開き、失敗したテストのトレースを見る |

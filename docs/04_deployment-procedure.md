@@ -1,6 +1,6 @@
 # Deployment Procedure — weaponx
 
-構成の全体は `docs/02-01_system-design-doc.md` 2章、ブランチ戦略とリリースの考え方は `docs/03_dev-setup.md` 9章。このドキュメントは手順を持つ。コマンドの `{PROJECT_ID}`・`{DOMAIN}` などは本番の値に置き換える。`gcloud` と `terraform` は `make ops-shell` のコンテナの中で実行する(`docs/03_dev-setup.md` 5章)。
+構成の全体は `docs/02-01_system-design-doc.md` 2章、ブランチ戦略とリリースの考え方は `docs/03_dev-setup.md` 9章。このドキュメントは手順を持つ。コマンドの `{PROJECT_ID}`・`{DOMAIN}` などは本番の値に置き換える。`gcloud`・`terraform`・`openssl` は `make ops-shell` のコンテナの中で実行する(`docs/03_dev-setup.md` 5章)。手元に入れるのは Docker・make・git だけ。
 
 ## 1. 環境一覧
 

@@ -9,7 +9,7 @@
 1. `design-spec.md` — 何を作るか(画面・振る舞い・用語)
 2. `01_prd.md` — なぜ作るか、誰のどんな課題か、何を作らないか
 3. `02-01_system-design-doc.md` — どう作るか(技術スタックの判断、API、データモデル、セキュリティ)
-4. `03_dev-setup.md` — 手元で動かす
+4. `03_dev-setup.md` — ローカル(Docker Compose)で動かす
 5. 運用する人は `04_deployment-procedure.md` → `05_operation-runbook.md`
 
 ## ドキュメント一覧
