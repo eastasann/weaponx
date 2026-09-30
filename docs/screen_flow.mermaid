@@ -1,0 +1,78 @@
+%% weaponx — 画面遷移図
+%% docs/design-spec.md の「3. 画面一覧」と対応する。
+%% 形の意味: [画面] / ([ダイアログ]) / [[外部(別タブ・Google の画面)]]
+%% ヘッダーのユーザーメニュー(連携設定・利用者管理・ログアウト)は全画面から開ける。図ではホームからの矢印で代表させる。
+
+graph TD
+    %% === 共通 ===
+    LOGIN["ログイン"]
+    EXT_AUTH[["Google のログイン画面"]]
+
+    LOGIN -->|"Google でログイン"| EXT_AUTH
+    EXT_AUTH -->|"許可済みのアカウント"| HOME
+    EXT_AUTH -->|"未許可・停止中・失敗"| LOGIN
+
+    %% === 一般ユーザー(管理者も使う) ===
+    HOME["ホーム<br/>案件一覧・横断検索"]
+    CASE["案件<br/>資料一覧 + 右の横パネル"]
+    MEMBER["メンバー管理"]
+    DRIVE["連携設定"]
+
+    DLG_NEWCASE(["案件を作る"])
+    DLG_ADD(["資料を追加<br/>リンクで登録 / 新しく作る"])
+    DLG_VER(["新しい版を登録"])
+    DLG_COPY(["作成<br/>これを元に作る / 新しい版を作る"])
+    DLG_EDIT(["登録内容を編集"])
+    DLG_RENAME(["案件名を変更"])
+    DLG_INVITE(["メンバーを招待"])
+
+    EXT_OPEN[["資料の元の場所(別タブ)"]]
+    EXT_EDITOR[["ドキュメント・スライドの編集画面(別タブ)"]]
+    EXT_CONSENT[["Google のドライブ権限の許可画面"]]
+
+    HOME -->|"案件を選ぶ"| CASE
+    HOME -->|"検索結果の資料を選ぶ<br/>(その資料を選んだ状態で開く)"| CASE
+    HOME -->|"+ 案件を作る"| DLG_NEWCASE
+    DLG_NEWCASE -->|"作成"| CASE
+    HOME -->|"開くアイコン"| EXT_OPEN
+
+    CASE -->|"開く(行のアイコン・横パネル)"| EXT_OPEN
+    CASE -->|"+ 資料を追加(編集者以上)"| DLG_ADD
+    DLG_ADD -->|"リンクで登録"| CASE
+    DLG_ADD -->|"新しく作る(連携あり)"| EXT_EDITOR
+    CASE -->|"新しい版を登録(編集者以上)"| DLG_VER
+    DLG_VER -->|"登録"| CASE
+    CASE -->|"これを元に作る / 新しい版を作る<br/>(編集者以上・連携あり)"| DLG_COPY
+    DLG_COPY -->|"作成"| EXT_EDITOR
+    DLG_COPY -->|"作成後の案件画面"| CASE
+    CASE -->|"登録内容を編集(編集者以上)"| DLG_EDIT
+    DLG_EDIT -->|"保存"| CASE
+    CASE -->|"案件名を変更(オーナー)"| DLG_RENAME
+    DLG_RENAME -->|"保存"| CASE
+    CASE -->|"他案件の元ネタ・派生資料を選ぶ<br/>(参加している案件のみ)"| CASE
+    CASE -->|"案件を削除(オーナー)"| HOME
+    CASE -->|"← ホーム"| HOME
+    CASE -->|"メンバー n人"| MEMBER
+    CASE -.->|"連携なしの人への案内"| DRIVE
+
+    MEMBER -->|"+ メンバーを招待(オーナー)"| DLG_INVITE
+    DLG_INVITE -->|"招待"| MEMBER
+    MEMBER -->|"← 案件へ"| CASE
+    MEMBER -->|"自分を外す"| HOME
+
+    HOME -->|"ユーザーメニュー: 連携設定"| DRIVE
+    DRIVE -->|"ドライブと連携する"| EXT_CONSENT
+    EXT_CONSENT -->|"許可・取り消し"| DRIVE
+    DRIVE -->|"ホームへ"| HOME
+
+    %% === 管理者 ===
+    ADMIN["利用者管理"]
+    DLG_ADDUSER(["利用者を追加"])
+
+    HOME -->|"ユーザーメニュー: 利用者管理<br/>(管理者のみ)"| ADMIN
+    ADMIN -->|"+ 利用者を追加"| DLG_ADDUSER
+    DLG_ADDUSER -->|"追加"| ADMIN
+    ADMIN -->|"ホームへ"| HOME
+
+    %% === 全画面共通 ===
+    HOME -->|"ユーザーメニュー: ログアウト"| LOGIN
