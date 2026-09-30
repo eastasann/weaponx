@@ -9,10 +9,11 @@
 | ソース | 出力先 | 保持期間 | 内容 |
 |--------|--------|----------|------|
 | API(Cloud Run `weaponx-api`) | Cloud Logging(`_Default`) | 30日 | 構造化 JSON。`severity`・`message`・`event`・`requestId`・`userId`・`route`・`status`・`durationMs`・`code`。例外はスタック付き |
-| 画面の想定外のエラー | 同上(`POST /api/client-errors` 経由) | 30日 | `event: "client_error"`、`message`・`stack`・`path` |
+| 画面の想定外のエラー | 同上(`POST /api/client-errors` 経由) | 30日 | `event: "client_error"`、`clientMessage`・`clientStack`・`path`。Error Reporting に拾われないよう、`message` にはエラーの文面を入れず `"client_error"` とし、スタックも `stack_trace` 以外の項目に入れる(ADR-019) |
 | マイグレーション・初期管理者の登録(Cloud Run ジョブ `weaponx-migrate`) | Cloud Logging | 30日 | 適用したマイグレーション、登録結果 |
-| ロードバランサー | Cloud Logging(`http_load_balancer`) | 30日 | すべてのリクエスト(パス、状態コード、遅延、Cloud Armor の判定)。`/api` と画面の両方 |
-| Cloud SQL | Cloud Logging(`cloudsql_database`) | 30日 | PostgreSQL のエラー、遅いクエリ(1秒以上)。Query Insights |
+| ロードバランサー | Cloud Logging(`http_load_balancer`) | 30日 | すべてのリクエスト(検索パラメーターを含む URL、状態コード、遅延、Cloud Armor の判定)。`/api` と画面の両方 |
+| Cloud Run の要求ログ(自動) | Cloud Logging(`run.googleapis.com/requests`) | 30日 | API へのリクエスト(検索パラメーターを含む URL、状態コード、遅延) |
+| Cloud SQL | Cloud Logging(`cloudsql_database`) | 30日 | PostgreSQL のエラー、遅いクエリ(1秒以上)。バインド変数の値とエラーの DETAIL は出さない設定(`docs/02-01_system-design-doc.md` 7章「ログ」)。Query Insights |
 | 監査ログ(管理アクティビティ) | Cloud Logging(`_Required`) | 400日 | GCP のリソースの変更(Terraform・gcloud の操作) |
 
 ログに出すもの・出さないもの、例外として受け入れるものは `docs/02-01_system-design-doc.md` 7章「ログ」。`route` は `メソッド + ルートのテンプレート`(例: `GET /api/projects/:projectId/series`)で、ID や検索パラメーターを含めない。
@@ -46,7 +47,8 @@ Terraform(`infra/monitoring.tf`)で作る。通知はすべてメール(`alert_e
 | 稼働 | アップタイムチェック `https://{DOMAIN}/api/healthz`(5分ごと、3地域) | 2回続けて失敗 | メール |
 | API の失敗率 | LB のバックエンドサービス `weaponx-api-backend` の 5xx の割合 | 5分間で 5% 超 | メール |
 | API の遅延 | LB のバックエンドの遅延 p95 | 10分間 2秒超 | メール |
-| 例外 | Error Reporting の新しいエラーグループ | 1件でも | メール(Error Reporting の通知) |
+| 例外(API) | Error Reporting の新しいエラーグループ | 1件でも | メール(Error Reporting の通知) |
+| 画面のエラー | ログベースの指標 `event="client_error"` の件数 | 1時間に5件超 | メール(件数だけ。本文は載せない) |
 | 要再連携の急増 | ログベースの指標 `event="drive_reauth_required"` の件数 | 1時間に5件超 | メール |
 | ログイン失敗の急増 | ログベースの指標 `event="login_failed"` の件数 | 1時間に20件超 | メール |
 | トークンの復号失敗 | ログベースの指標 `event="token_decrypt_failed"` の件数 | 1件でも | メール |

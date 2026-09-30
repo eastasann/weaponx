@@ -234,9 +234,9 @@ Google のアクセストークン(1時間有効)だけは、インスタンス�
 
 **決定:** ログは構造化 JSON を標準出力に出し、Cloud Logging で集める。例外は Error Reporting、稼働監視とアラートは Cloud Monitoring(アップタイムチェックとアラートポリシー)で行う。画面で起きた想定外のエラーは、API の `POST /api/client-errors` に送り、同じ Cloud Logging に残す。Sentry 等の外部サービスは使わない。
 
-**理由:** 追加のアカウントが要らず、Terraform で一緒に管理できる。ログとエラーの置き場所が GCP の中だけになり、資料名などが外部のサービスに出る経路を増やさない(7章「個人情報」)。
+**理由:** 追加のアカウントが要らず、Terraform で一緒に管理できる。ログとエラーの置き場所が GCP の中だけになり、資料名などが外部のサービスに出る経路を増やさない(7章「ログ」)。
 
-**トレードオフ:** 画面のエラーは、ソースマップでの復元と集約をせず、圧縮されたスタックのまま残る(調べるときは手元でビルドの成果物と照らす)。捨てた案: Sentry(無料枠があり画面のエラーの集約に強いが、外部に送る経路が増え、アカウントの管理が1つ増える)。
+**トレードオフ:** 画面のエラーは Error Reporting に集めない(集めると、新しいエラーの通知メールに `message` が載り、資料名が GCP の外に出うる)。ソースマップでの復元もせず、圧縮されたスタックのまま Cloud Logging に残し、件数だけをログベースの指標でアラートにする(`docs/05_operation-runbook.md` 2章)。調べるときは手元でビルドの成果物と照らす。捨てた案: Sentry(無料枠があり画面のエラーの集約に強いが、外部に送る経路が増え、アカウントの管理が1つ増える)。
 
 ### ADR-020: デザイントークンから CSS 変数を生成する(変換ツールは使わない)
 
@@ -393,9 +393,9 @@ type ProjectRow = {
 6. `users` を更新(初回は `google_subject`、毎回 `display_name`・`avatar_url`・`last_login_at`、`locale` が空なら `wx_oauth_ctx.locale`)。期限切れのセッションをまとめて消す(掃除)。新しいセッションを作り `wx_session` を返す
 7. 302 で `returnTo`(無ければ `/`)へ
 
-失敗したときは 302 `/login` へ送り、Cookie `wx_login_notice`(JS から読める、SameSite=Lax、60秒)に `{ "code": "not_allowed" | "suspended" | "drive_scope_missing" | "cancelled" | "failed", "email"?: string }` を入れる。`cancelled` は Google から `error=access_denied` が返った場合、それ以外の障害は `failed`。ログイン画面はこれを読んで design-spec 6.5.1 の表示を出し、Cookie を消す(メールを URL に載せないため)。
+失敗したときは 302 `/login` へ送り、Cookie `wx_login_notice`(JS から読める、SameSite=Lax、Path=/、60秒)に `{ "code": "not_allowed" | "suspended" | "drive_scope_missing" | "cancelled" | "failed", "email"?: string }` を入れる。`cancelled` は Google から `error=access_denied` が返った場合、それ以外の障害は `failed`。ログイン画面はこれを読んで design-spec 6.5.1 の表示を出し、Cookie を消す(メールを URL に載せないため)。
 
-`mode: "reconnect"` の処理: `sub` が `users.google_subject` と違えば `wrong_account`、範囲が足りなければ `scope_missing`、交換に失敗すれば `failed`、`access_denied` なら `cancelled`。成功したら `drive_connections` を連携中に更新して `reconnected`。どの場合も 302 で `returnTo` へ戻し、Cookie `wx_drive_notice`(JS から読める、60秒)に `{ "code": ... }` を入れる。画面はこれで design-spec 6.0.5 の通知を出す。
+`mode: "reconnect"` の処理: `sub` が `users.google_subject` と違えば `wrong_account`、範囲が足りなければ `scope_missing`、交換に失敗すれば `failed`、`access_denied` なら `cancelled`。成功したら `drive_connections` を連携中に更新して `reconnected`。どの場合も 302 で `returnTo` へ戻し、Cookie `wx_drive_notice`(JS から読める、SameSite=Lax、Path=/、60秒)に `{ "code": ... }` を入れる。画面はこれで design-spec 6.0.5 の通知を出す。
 
 **`POST /api/auth/logout`** → 204。セッションの行を消し、`wx_session` を消す。
 
@@ -519,6 +519,7 @@ type ProjectRow = {
 
 → 201 `{ "series": SeriesRow, "document": Version, "driveStatus": "active" }`
 
+- ドライブの資料の取り直し、取り直せないときの扱い、応答の `driveStatus` は `POST /api/projects/:projectId/documents` と同じ
 - `referenceIds` は、画面が最新版の参考資料を初期値として入れた後の最終形。新しく足したものだけを検証する(design-spec 6.0.3)
 
 **`POST /api/series/:seriesId/versions/copy`**(編集者以上。新しい版を作る)
@@ -557,7 +558,7 @@ type ProjectRow = {
 
 → 200 `{ "series": SeriesRow, "document": Version, "driveStatus": "active" }`
 
-- 送った項目だけを変える。`tags` と `referenceIds` は最終形の一式を送る(design-spec 6.0.6)。DB への書き方は6章 document_tags の規則
+- 送った項目だけを変える。`tags` と `referenceIds` は最終形の一式を送る(design-spec 6.0.6)。応答の `driveStatus` は、リンクを変えないときも付ける(今の連携の状態)。DB への書き方は6章 document_tags の規則
 - `nameLocked` の版で `name`・`sourceModifiedAt` を送ったら 422 `VALIDATION_FAILED`(`url` を変えた場合を除く。design-spec 6.5.6)。`url` を変えたら `metadata_fetched_at` を空にし、ドライブの資料(5.1)で取り直せたら入れる(取り直せないときの扱いは `POST /api/projects/:projectId/documents` と同じ)
 - 削除済みの版は 404 `DOCUMENT_NOT_FOUND`
 
@@ -668,7 +669,7 @@ type ProjectRow = {
 | `GET /api/readyz` | 不要 | DB に `SELECT 1` して 200 / 503 |
 | `POST /api/client-errors` | 不要 | 画面の想定外のエラーを送る(ログイン画面・エラー画面からも送れるように認証を求めない。セッションがあれば利用者 ID を記録する)。本文 `{ "message": string, "stack"?: string, "path": string }`。204。記録するときは `path` から検索パラメーターを落とし、`message` は500文字、`stack` は4000文字で切る(7章「ログ」) |
 | `GET /api/dev/users` | 不要 | 開発用ログインの利用者一覧。一度でもログインした(Google アカウントの ID がある)利用者だけを返す(未ログインの利用者は、ドライブ連携の記録が無いので選べない)。`DEV_LOGIN_ENABLED=true` のときだけルートを登録する |
-| `POST /api/dev/login` | 不要 | 本文 `{ "email": "yamada@example.com" }` → 204。セッションを作る。`drive_connections` は更新しない(design-spec 8章)。停止中の利用者は本物のログインと同じく `wx_login_notice`(`suspended`)を入れて 401。同上 |
+| `POST /api/dev/login` | 不要 | 本文 `{ "email": "yamada@example.com" }` → 204。セッションを作る。`drive_connections` は更新しない(design-spec 8章)。停止中の利用者は本物のログインと同じく `wx_login_notice`(`suspended`)を入れて 401 `ACCOUNT_SUSPENDED`。同上 |
 | `POST /api/dev/drive/grant` | 要 | 本文 `{ "fileId": "..." }` → 204。ドライブの模擬で、そのファイルを呼んだ利用者の「アプリが使えるファイル」にする(模擬のファイル選択画面で選んだときに画面が呼ぶ。design-spec 8章)。`DRIVE_MODE=mock` のときだけルートを登録する |
 
 `NODE_ENV=production` で `DEV_LOGIN_ENABLED=true` または `DRIVE_MODE=mock` なら、API は起動しない(誤って本番で開発用ログインや模擬を開けないため)。
@@ -945,7 +946,7 @@ export const documentTags = pgTable(
   - 初回ログインで作り、以降のログインと再連携で `credentials`・`status`・`granted_scopes`・`connected_at` を更新する。アプリに連携の解除は無いので、行を消すことは無い
   - 再連携したアカウントの `sub` が `users.google_subject` と違えば保存しない(design-spec 6.0.5)
 - sessions
-  - 期限と延長は ADR-010。利用者の停止・ログアウトで行を消す。期限切れの行はログインのたびにまとめて消す
+  - 期限と延長は ADR-010。ログアウトと、停止された人の次のリクエスト(停止の操作の時点では消さない。5.9・7章)で行を消す。期限切れの行はログインのたびにまとめて消す
 - projects
   - `last_activity_at` を更新する場面: 案件の作成、案件名の変更、版の登録・作成、登録内容の編集、版の削除、メタデータの取り直しで版の更新日時が新しくなったとき。値はその操作の日時(取り直しの場合は新しい更新日時と今の値の新しいほう)
   - 削除されていない案件のオーナーが1人以上(design-spec 2.1): `role = owner` の `project_members` を数える
@@ -961,9 +962,9 @@ export const documentTags = pgTable(
   - 参考資料の版やその案件が削除済みになっても行は残し、`RelatedItem` の `deleted` として返す
 - document_tags
   - 件数の上限と重複の判定は design-spec 6.0.3(`label_key` が同じなら重複)
-  - 保存は、送られた一式と今の行を比べ、無くなったタグの行を消し、増えたタグの行を足す。足す行の `position` は、その版の今の最大値 + 1 から、送られた一式の順に振る。残るタグの行は触らない(付けた順を保つ)
+  - 保存は、送られた一式と今の行を `label_key` で比べ、無くなったタグの行を消し、増えたタグの行を足す。残るタグで `label` の表記が変わっていれば `label` だけを書き換える(`position` は保つ)。足す行の `position` は、その版の今の最大値 + 1 から、送られた一式の順に振る。残るタグの行は触らない(付けた順を保つ)
   - 版が削除済みになっても行は残す(表示には出さない)
-  - 同じ `label_key` で表記が違うタグ(Final と final など)が複数の版にあるときは、表のバッジ(`SeriesRow.tags`)とタグの候補では、`label_key` ごとに最も新しく付けた行の `label` を返す。版ごとの表示(`Version.tags`)は、その版に付けた `label` のまま返す
+  - タグの候補は、同じ `label_key` で表記が違うタグ(Final と final など)があれば、`label_key` ごとに最も新しく付けた行(`created_at` が最新)の `label` を返す。表のバッジの `label` は「導出する値」、版ごとの表示(`Version.tags`)は、その版に付けた `label` のまま返す
 
 ### 導出する値
 
@@ -976,7 +977,7 @@ export const documentTags = pgTable(
 | 案件の最終更新 | `projects.last_activity_at` |
 | 参考資料(ある版の) | `document_references` で `document_id` がその版である行の `referenced_document_id` |
 | この資料を参考にした資料(ある系列の) | 相手の系列の最新版が参考資料を持たず旧版だけが持つ場合も含める。`referenced_document_id` がこの系列の削除されていない版で、`document_id` が削除されていない版(その案件も削除されていない)である行を集め、`document_id` の系列ごとに1行にまとめる。行の名前はその系列の最新版の名前。添える版番号は、その系列が参考にしたこの系列の版のうち最大の `version_no`(この系列の削除されていない版が1つだけなら添えない) |
-| 表の行のタグ(`SeriesRow.tags`) | 系列の削除されていない版に付いたタグを `label_key` ごとにまとめ、そのタグが付いた版のうち最大の `version_no` を求める。それが最新版なら `versionNo: null`、そうでなければその `version_no`。並び順は、求めた `version_no` の大きい順(同じ版の中は付けた順 = `position` の小さい順)。何件出すか・表記は design-spec 6.1 |
+| 表の行のタグ(`SeriesRow.tags`) | 系列の削除されていない版に付いたタグを `label_key` ごとにまとめ、そのタグが付いた版のうち最大の `version_no` を求める。それが最新版なら `versionNo: null`、そうでなければその `version_no`。`label` は、その版に付いた行の `label`(表記はその版のもの)。並び順は、求めた `version_no` の大きい順(同じ版の中は付けた順 = `position` の小さい順)。何件出すか・表記は design-spec 6.1 |
 | 唯一のオーナーの案件数 | その人が owner で、他に owner がいない、削除されていない案件の数 |
 | 関連資料の表示区分(RelatedItem.visibility) | 相手の版の案件に `project_members` の行が無い → `no_access`。ある場合、相手の版か案件が削除済み → `deleted`。それ以外 → `visible`(design-spec 6.1 関連資料の表示規則の1〜4) |
 
@@ -1034,10 +1035,10 @@ export const documentTags = pgTable(
 | OAuth | PKCE(S256)と `state` を使う。`returnTo` は相対パスだけ(4章)。ID トークンの `aud`・`iss`・`exp`・`email_verified` を確かめる |
 | Google のトークン | リフレッシュトークンは AES-256-GCM で暗号化して保存(ADR-012)。アクセストークンは保存しない(インスタンスのメモリにだけキャッシュ)。Picker 用に画面へ渡すのは `drive.file` の短命のアクセストークンだけで、画面は保存しない |
 | レート制限 | Cloud Armor で IP ごとに、`/api/auth/*` は1分60回、それ以外の `/api/*` は1分600回。超えたら 429(ADR-007) |
-| セキュリティヘッダー | バックエンドバケットと Cloud Run の応答に `Strict-Transport-Security`、`X-Content-Type-Options: nosniff`、`Referrer-Policy: strict-origin-when-cross-origin`、`Content-Security-Policy`(`default-src 'self'`、Picker のために `script-src` に `https://apis.google.com`、`frame-src` に `https://docs.google.com https://drive.google.com https://accounts.google.com`、`img-src` に `https://*.googleusercontent.com`、`frame-ancestors 'none'`)を付ける |
+| セキュリティヘッダー | バックエンドバケットと Cloud Run の応答に `Strict-Transport-Security`、`X-Content-Type-Options: nosniff`、`Referrer-Policy: no-referrer`(検索語を含む URL を、同じオリジンへのリクエストの Referer にも載せないため)、`Content-Security-Policy`(`default-src 'self'`、Picker のために `script-src` に `https://apis.google.com`、`frame-src` に `https://docs.google.com https://drive.google.com https://accounts.google.com`、`img-src` に `https://*.googleusercontent.com`、`frame-ancestors 'none'`)を付ける |
 | 外部リンク | 資料を開くリンクは `target="_blank" rel="noopener noreferrer"` |
 | 個人情報 | 保存するのは、メール、Google の表示名とアイコン画像の URL、Google アカウントの ID(`google_subject`)、最終ログイン。DB は Cloud SQL の保存時暗号化(Google 管理の鍵)に任せる |
-| ログ | 資料名とリンクは業務上の秘密を含みうるので、アプリはログに出さない。ログには利用者 ID を出し、メール・トークン・Cookie・リクエスト本文は出さない。例外として受け入れるもの: (1) LB と Cloud Run が自動で残す要求ログには URL の検索パラメーターがそのまま入る(ホームの `?q=`、`/api/search?q=`・候補の `?q=` の検索語)。(2) 画面の想定外のエラー(`POST /api/client-errors`)の `message` に資料名が入ることがある(`path` の検索パラメーターは落とし、長さを切る。5.10)。どちらもログは同じ GCP プロジェクトの中にだけあり、閲覧できるのはプロジェクトのオーナー(作者)だけ、保持は30日。検索語を残したくなったら、検索を POST の本文で送る形に変える |
+| ログ | 資料名とリンクは業務上の秘密を含みうるので、アプリはログに出さない。ログには利用者 ID を出し、メール・トークン・Cookie・リクエスト本文は出さない。例外として受け入れるもの: (1) LB と Cloud Run が自動で残す要求ログには URL の検索パラメーターがそのまま入る(ホームの `?q=`、`/api/search?q=`・参考資料とタグの候補の `?q=` の検索語、招待の候補の `?q=` の名前・メールの一部)。(2) 画面の想定外のエラー(`POST /api/client-errors`)の `message` に資料名が入ることがある(`path` の検索パラメーターは落とし、長さを切る。5.10。Error Reporting には送らない。ADR-019)。どちらもログは同じ GCP プロジェクトの中にだけあり、閲覧できるのはプロジェクトのオーナー(作者)だけ。保持は `docs/05_operation-runbook.md` 1章。検索語を残したくなったら、ホームの URL から `?q=` を外し、検索を POST の本文で送る形に変える。Cloud SQL のログには値を残さない: フラグ `log_parameter_max_length=0`・`log_parameter_max_length_on_error=0`(遅いクエリ・エラーのログにバインド変数の値を出さない)と `log_error_verbosity=terse`(一意制約違反の DETAIL にキーの値を出さない)を設定する |
 | DB への接続 | Cloud SQL の承認済みネットワークは空。DB への接続に使う権限は、Cloud Run のサービスアカウントの `roles/cloudsql.client` だけ(サービスアカウントのほかのロールは `docs/04_deployment-procedure.md` 3章) |
 | 開発用ログイン | 本番では起動時に拒否する(5.10) |
 
@@ -1088,7 +1089,7 @@ export const documentTags = pgTable(
 | `ROLE_INSUFFICIENT` | 403 | 権限がない(役割) | — | 役割が足りない |
 | `ADMIN_REQUIRED` | 403 | 権限がない(管理者) | — | 管理者でない |
 | `PROJECT_NOT_FOUND` | 404 | 見つからない(案件) | — | 案件が無い・削除済み・不参加 |
-| `DOCUMENT_NOT_FOUND` | 404 | 見つからない(資料) | `{ seriesExists: boolean }` | 版・系列が削除された |
+| `DOCUMENT_NOT_FOUND` | 404 | 見つからない(資料) | `{ seriesExists: boolean }` | 版・系列の ID が存在しない・削除された |
 | `MEMBER_NOT_FOUND` | 404 | 見つからない(メンバー) | — | 操作しようとしたメンバーがすでに外されていた |
 | `NOT_FOUND` | 404 | 見つからない | — | 存在しない API のパス・利用者 |
 | `VALIDATION_FAILED` | 422 | 入力の問題 | `{ fields: Record<string, "required" \| "too_long" \| "invalid_url" \| "invalid_format" \| "too_many" \| "future_date" \| "locked"> }` | 6.0.3 の検証 |
@@ -1110,7 +1111,7 @@ export const documentTags = pgTable(
 | `INTERNAL` | 500 | 通信・その他 | — | 想定外の例外 |
 | `SERVICE_UNAVAILABLE` | 503 | 通信・その他 | — | DB・Google に一時的につながらない |
 
-- Google の Drive API の応答の分け方: 401、`invalid_grant`(リフレッシュ時)、範囲不足の 403 → `DRIVE_REAUTH_REQUIRED` にして `drive_connections.status` を `needs_reauth` にする。ファイル単位の 404・403(`insufficientFilePermissions` 等)→ `DRIVE_FILE_NOT_ACCESSIBLE` / `DRIVE_SOURCE_UNAVAILABLE`。レート制限(`rateLimitExceeded`・`userRateLimitExceeded`)・5xx → 1回だけ待って再試行し、だめなら `SERVICE_UNAVAILABLE`(要再連携にしない)
+- Google の Drive API の応答の分け方: 401、`invalid_grant`(リフレッシュ時)、範囲不足の 403 → `drive_connections.status` を `needs_reauth` にし、`DRIVE_REAUTH_REQUIRED` を返す。ただし、5.5 の登録系(リンクでの登録、新しい版の登録、登録内容の編集でリンクを変えたとき)の中での取り直しでは、エラーを返さずに登録を成功させ、状態だけを `driveStatus` で返す。ファイル単位の 404・403(`insufficientFilePermissions` 等)→ `DRIVE_FILE_NOT_ACCESSIBLE` / `DRIVE_SOURCE_UNAVAILABLE`。レート制限(`rateLimitExceeded`・`userRateLimitExceeded`)・5xx → 1回だけ待って再試行し、だめなら `SERVICE_UNAVAILABLE`(要再連携にしない)
 - 同じ結果になる操作(停止済みの人の停止など。design-spec 6.0.6)は 200 で成功を返す
 
 ### フロントエンドでの表示方針
@@ -1171,7 +1172,7 @@ export const documentTags = pgTable(
 |------|--------|------|
 | アプリのログ | Cloud Logging | 構造化 JSON を標準出力へ。リクエスト ID の付け方は8章「ログとの対応」 |
 | LB のログ | Cloud Logging | バックエンドサービスとバックエンドバケットのログを有効化 |
-| 例外 | Error Reporting | `ERROR` のログ(スタック付き)から自動で集める |
+| 例外 | Error Reporting | API の `ERROR` のログ(スタック付き)から自動で集める。画面のエラーは集めない(ADR-019) |
 | 画面の例外 | Cloud Logging(API 経由) | `POST /api/client-errors`(5.10、7章「ログ」) |
 | 稼働監視・アラート | Cloud Monitoring(アップタイムチェック、アラートポリシー、ログベースの指標) | `docs/05_operation-runbook.md` 2章 |
 | DB | Cloud SQL の組み込みメトリクス + Query Insights | 遅いクエリは Query Insights |
