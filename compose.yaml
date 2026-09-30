@@ -1,0 +1,132 @@
+# ローカル開発環境(ADR-021)。手元の操作は Makefile 経由で行う
+
+# api・web・tools は同じイメージ。ビルドは tools だけが持つ(make setup の docker compose build で1回だけ作る)
+x-dev: &dev
+  image: weaponx-dev
+  pull_policy: never
+  user: "${UID:-0}:${GID:-0}"
+  working_dir: /workspace
+  volumes:
+    - .:/workspace
+  environment: &dev-env
+    HOME: /tmp
+    NODE_ENV: ${NODE_ENV:-development}
+    APP_ORIGIN: ${APP_ORIGIN:-http://localhost:5173}
+    PORT: ${PORT:-3000}
+    LOG_LEVEL: ${LOG_LEVEL:-debug}
+    APP_VERSION: ${APP_VERSION:-dev}
+    DATABASE_URL: ${DATABASE_URL:-postgres://weaponx:weaponx@db:5432/weaponx}
+    TEST_DATABASE_URL: ${TEST_DATABASE_URL:-postgres://weaponx:weaponx@db:5432/weaponx_test}
+    DEV_LOGIN_ENABLED: ${DEV_LOGIN_ENABLED:-true}
+    DRIVE_MODE: ${DRIVE_MODE:-mock}
+    GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    GOOGLE_PICKER_API_KEY: ${GOOGLE_PICKER_API_KEY:-}
+    GOOGLE_PROJECT_NUMBER: ${GOOGLE_PROJECT_NUMBER:-}
+    TOKEN_ENCRYPTION_KEYS: ${TOKEN_ENCRYPTION_KEYS:-}
+    WATCH_POLLING: ${WATCH_POLLING:-}
+    NODE_EXTRA_CA_CERTS: ${EXTRA_CA_CERT:+/etc/extra-ca.crt}
+    SSL_CERT_FILE: ${EXTRA_CA_CERT:+/etc/extra-ca.crt}
+
+secrets:
+  extra_ca:
+    # 空のときは /dev/null を渡す(BuildKit の secret はファイルが要る)
+    file: ${EXTRA_CA_CERT:-/dev/null}
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: weaponx
+      POSTGRES_PASSWORD: weaponx
+      POSTGRES_DB: weaponx
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./docker/db-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U weaponx -d weaponx"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    <<: *dev
+    command: bun run --cwd apps/api dev
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/workspace
+      - ${EXTRA_CA_CERT:-/dev/null}:/etc/extra-ca.crt:ro
+    environment:
+      <<: *dev-env
+
+  web:
+    <<: *dev
+    command: bun run --cwd apps/web dev
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      - api
+    volumes:
+      - .:/workspace
+      - ${EXTRA_CA_CERT:-/dev/null}:/etc/extra-ca.crt:ro
+    environment:
+      <<: *dev-env
+      API_PROXY_TARGET: http://api:3000
+
+  tools:
+    <<: *dev
+    build:
+      context: .
+      dockerfile: docker/dev.Dockerfile
+    command: sleep infinity
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/workspace
+      - ${EXTRA_CA_CERT:-/dev/null}:/etc/extra-ca.crt:ro
+
+  e2e:
+    profiles: ["e2e"]
+    image: mcr.microsoft.com/playwright:v1.55.0-noble
+    user: "${UID:-0}:${GID:-0}"
+    working_dir: /workspace/e2e
+    volumes:
+      - .:/workspace
+      - ${EXTRA_CA_CERT:-/dev/null}:/etc/extra-ca.crt:ro
+    environment:
+      HOME: /tmp
+      NODE_EXTRA_CA_CERTS: ${EXTRA_CA_CERT:+/etc/extra-ca.crt}
+    ports:
+      - "127.0.0.1:9323:9323"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  ops:
+    profiles: ["ops"]
+    build:
+      context: .
+      dockerfile: docker/ops.Dockerfile
+      secrets:
+        - extra_ca
+    image: weaponx-ops
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - gcloud-config:/root/.config/gcloud
+      - ${EXTRA_CA_CERT:-/dev/null}:/etc/extra-ca.crt:ro
+    environment:
+      CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE: ${EXTRA_CA_CERT:+/etc/extra-ca.crt}
+      SSL_CERT_FILE: ${EXTRA_CA_CERT:+/etc/extra-ca.crt}
+    command: sleep infinity
+
+volumes:
+  db-data:
+  gcloud-config:

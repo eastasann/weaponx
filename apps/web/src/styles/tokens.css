@@ -1,0 +1,271 @@
+/* docs/06_design-tokens.json から scripts/gen-tokens.ts が生成する。直接編集しない(make tokens) */
+:root {
+  --token-color-background: #f8fafc;
+  --token-color-surface: #ffffff;
+  --token-color-surface-muted: #f1f5f9;
+  --token-color-row-hover: #f1f5f9;
+  --token-color-selected: #eff6ff;
+  --token-color-selected-border: #bfdbfe;
+  --token-color-border: #e2e8f0;
+  --token-color-border-strong: #cbd5e1;
+  --token-color-text: #0f172a;
+  --token-color-text-muted: #475569;
+  --token-color-text-subtle: #64748b;
+  --token-color-accent: #2563eb;
+  --token-color-accent-hover: #1d4ed8;
+  --token-color-on-accent: #ffffff;
+  --token-color-link: #1d4ed8;
+  --token-color-focus-ring: #3b82f6;
+  --token-color-skeleton: #e2e8f0;
+  --token-color-badge: #f1f5f9;
+  --token-color-badge-text: #334155;
+  --token-color-warning: #b45309;
+  --token-color-warning-surface: #fffbeb;
+  --token-color-warning-border: #fcd34d;
+  --token-color-danger: #b91c1c;
+  --token-color-danger-solid: #dc2626;
+  --token-color-danger-solid-hover: #b91c1c;
+  --token-color-on-danger: #ffffff;
+  --token-color-danger-surface: #fef2f2;
+  --token-color-success: #1d4ed8;
+  --token-color-success-surface: #eff6ff;
+  --token-color-scrim: #02061773;
+  --typography-body-font-family: Inter, "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif;
+  --typography-body-font-size: 0.875rem;
+  --typography-body-font-weight: 400;
+  --typography-body-letter-spacing: 0px;
+  --typography-body-line-height: 1.5;
+  --typography-body-small-font-family: Inter, "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif;
+  --typography-body-small-font-size: 0.8125rem;
+  --typography-body-small-font-weight: 400;
+  --typography-body-small-letter-spacing: 0px;
+  --typography-body-small-line-height: 1.5;
+  --typography-table-font-family: Inter, "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif;
+  --typography-table-font-size: 0.8125rem;
+  --typography-table-font-weight: 400;
+  --typography-table-letter-spacing: 0px;
+  --typography-table-line-height: 1.4;
+  --typography-numeric-font-family: Inter, "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif;
+  --typography-numeric-font-size: 0.8125rem;
+  --typography-numeric-font-weight: 400;
+  --typography-numeric-letter-spacing: 0px;
+  --typography-numeric-line-height: 1.4;
+  --typography-caption-font-family: Inter, "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif;
+  --typography-caption-font-size: 0.75rem;
+  --typography-caption-font-weight: 400;
+  --typography-caption-letter-spacing: 0px;
+  --typography-caption-line-height: 1.5;
+  --typography-label-font-family: Inter, "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif;
+  --typography-label-font-size: 0.8125rem;
+  --typography-label-font-weight: 500;
+  --typography-label-letter-spacing: 0px;
+  --typography-label-line-height: 1.5;
+  --typography-section-heading-font-family: Inter, "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif;
+  --typography-section-heading-font-size: 0.8125rem;
+  --typography-section-heading-font-weight: 600;
+  --typography-section-heading-letter-spacing: 0px;
+  --typography-section-heading-line-height: 1.3;
+  --typography-dialog-title-font-family: Inter, "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif;
+  --typography-dialog-title-font-size: 1rem;
+  --typography-dialog-title-font-weight: 600;
+  --typography-dialog-title-letter-spacing: 0px;
+  --typography-dialog-title-line-height: 1.3;
+  --typography-page-title-font-family: Inter, "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif;
+  --typography-page-title-font-size: 1.125rem;
+  --typography-page-title-font-weight: 600;
+  --typography-page-title-letter-spacing: 0px;
+  --typography-page-title-line-height: 1.3;
+  --typography-app-name-font-family: Inter, "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif;
+  --typography-app-name-font-size: 1rem;
+  --typography-app-name-font-weight: 700;
+  --typography-app-name-letter-spacing: 0px;
+  --typography-app-name-line-height: 1.3;
+  --typography-display-font-family: Inter, "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif;
+  --typography-display-font-size: 1.5rem;
+  --typography-display-font-weight: 700;
+  --typography-display-letter-spacing: 0px;
+  --typography-display-line-height: 1.3;
+  --space-cell-x: 8px;
+  --space-inline-gap: 8px;
+  --space-stack-gap: 12px;
+  --space-panel-padding: 16px;
+  --space-dialog-padding: 20px;
+  --space-page-gutter: 16px;
+  --space-section-gap: 16px;
+  --size-row: 32px;
+  --size-control: 32px;
+  --size-header: 48px;
+  --size-toolbar: 44px;
+  --size-icon: 16px;
+  --size-avatar: 28px;
+  --size-side-panel: 400px;
+  --size-dialog: 520px;
+  --radius-control: 4px;
+  --radius-chip: 9999px;
+  --radius-surface: 8px;
+  --shadow-popover: 0px 4px 12px 0px #0000001f;
+  --shadow-dialog: 0px 12px 32px 0px #00000033;
+  --motion-fast-duration: 120ms;
+  --motion-fast-easing: cubic-bezier(0.2, 0, 0, 1);
+  --motion-panel-duration: 200ms;
+  --motion-panel-easing: cubic-bezier(0.2, 0, 0, 1);
+  --duration-toast: 4000ms;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --token-color-background: #020617;
+    --token-color-surface: #0f172a;
+    --token-color-surface-muted: #1e293b;
+    --token-color-row-hover: #1e293b;
+    --token-color-selected: #172554;
+    --token-color-selected-border: #1e40af;
+    --token-color-border: #334155;
+    --token-color-border-strong: #475569;
+    --token-color-text: #f8fafc;
+    --token-color-text-muted: #94a3b8;
+    --token-color-text-subtle: #64748b;
+    --token-color-accent: #2563eb;
+    --token-color-accent-hover: #3b82f6;
+    --token-color-on-accent: #ffffff;
+    --token-color-link: #60a5fa;
+    --token-color-focus-ring: #60a5fa;
+    --token-color-skeleton: #1e293b;
+    --token-color-badge: #1e293b;
+    --token-color-badge-text: #cbd5e1;
+    --token-color-warning: #fbbf24;
+    --token-color-warning-surface: #451a03;
+    --token-color-warning-border: #92400e;
+    --token-color-danger: #f87171;
+    --token-color-danger-solid: #dc2626;
+    --token-color-danger-solid-hover: #ef4444;
+    --token-color-on-danger: #ffffff;
+    --token-color-danger-surface: #450a0a;
+    --token-color-success: #60a5fa;
+    --token-color-success-surface: #172554;
+    --token-color-scrim: #00000099;
+  }
+}
+
+@theme inline {
+  --color-background: var(--token-color-background);
+  --color-surface: var(--token-color-surface);
+  --color-surface-muted: var(--token-color-surface-muted);
+  --color-row-hover: var(--token-color-row-hover);
+  --color-selected: var(--token-color-selected);
+  --color-selected-border: var(--token-color-selected-border);
+  --color-border: var(--token-color-border);
+  --color-border-strong: var(--token-color-border-strong);
+  --color-text: var(--token-color-text);
+  --color-text-muted: var(--token-color-text-muted);
+  --color-text-subtle: var(--token-color-text-subtle);
+  --color-accent: var(--token-color-accent);
+  --color-accent-hover: var(--token-color-accent-hover);
+  --color-on-accent: var(--token-color-on-accent);
+  --color-link: var(--token-color-link);
+  --color-focus-ring: var(--token-color-focus-ring);
+  --color-skeleton: var(--token-color-skeleton);
+  --color-badge: var(--token-color-badge);
+  --color-badge-text: var(--token-color-badge-text);
+  --color-warning: var(--token-color-warning);
+  --color-warning-surface: var(--token-color-warning-surface);
+  --color-warning-border: var(--token-color-warning-border);
+  --color-danger: var(--token-color-danger);
+  --color-danger-solid: var(--token-color-danger-solid);
+  --color-danger-solid-hover: var(--token-color-danger-solid-hover);
+  --color-on-danger: var(--token-color-on-danger);
+  --color-danger-surface: var(--token-color-danger-surface);
+  --color-success: var(--token-color-success);
+  --color-success-surface: var(--token-color-success-surface);
+  --color-scrim: var(--token-color-scrim);
+}
+
+.typography-body {
+  font-family: var(--typography-body-font-family);
+  font-size: var(--typography-body-font-size);
+  font-weight: var(--typography-body-font-weight);
+  letter-spacing: var(--typography-body-letter-spacing);
+  line-height: var(--typography-body-line-height);
+}
+
+.typography-body-small {
+  font-family: var(--typography-body-small-font-family);
+  font-size: var(--typography-body-small-font-size);
+  font-weight: var(--typography-body-small-font-weight);
+  letter-spacing: var(--typography-body-small-letter-spacing);
+  line-height: var(--typography-body-small-line-height);
+}
+
+.typography-table {
+  font-family: var(--typography-table-font-family);
+  font-size: var(--typography-table-font-size);
+  font-weight: var(--typography-table-font-weight);
+  letter-spacing: var(--typography-table-letter-spacing);
+  line-height: var(--typography-table-line-height);
+}
+
+.typography-numeric {
+  font-family: var(--typography-numeric-font-family);
+  font-size: var(--typography-numeric-font-size);
+  font-weight: var(--typography-numeric-font-weight);
+  letter-spacing: var(--typography-numeric-letter-spacing);
+  line-height: var(--typography-numeric-line-height);
+  font-variant-numeric: tabular-nums;
+}
+
+.typography-caption {
+  font-family: var(--typography-caption-font-family);
+  font-size: var(--typography-caption-font-size);
+  font-weight: var(--typography-caption-font-weight);
+  letter-spacing: var(--typography-caption-letter-spacing);
+  line-height: var(--typography-caption-line-height);
+}
+
+.typography-label {
+  font-family: var(--typography-label-font-family);
+  font-size: var(--typography-label-font-size);
+  font-weight: var(--typography-label-font-weight);
+  letter-spacing: var(--typography-label-letter-spacing);
+  line-height: var(--typography-label-line-height);
+}
+
+.typography-section-heading {
+  font-family: var(--typography-section-heading-font-family);
+  font-size: var(--typography-section-heading-font-size);
+  font-weight: var(--typography-section-heading-font-weight);
+  letter-spacing: var(--typography-section-heading-letter-spacing);
+  line-height: var(--typography-section-heading-line-height);
+}
+
+.typography-dialog-title {
+  font-family: var(--typography-dialog-title-font-family);
+  font-size: var(--typography-dialog-title-font-size);
+  font-weight: var(--typography-dialog-title-font-weight);
+  letter-spacing: var(--typography-dialog-title-letter-spacing);
+  line-height: var(--typography-dialog-title-line-height);
+}
+
+.typography-page-title {
+  font-family: var(--typography-page-title-font-family);
+  font-size: var(--typography-page-title-font-size);
+  font-weight: var(--typography-page-title-font-weight);
+  letter-spacing: var(--typography-page-title-letter-spacing);
+  line-height: var(--typography-page-title-line-height);
+}
+
+.typography-app-name {
+  font-family: var(--typography-app-name-font-family);
+  font-size: var(--typography-app-name-font-size);
+  font-weight: var(--typography-app-name-font-weight);
+  letter-spacing: var(--typography-app-name-letter-spacing);
+  line-height: var(--typography-app-name-line-height);
+}
+
+.typography-display {
+  font-family: var(--typography-display-font-family);
+  font-size: var(--typography-display-font-size);
+  font-weight: var(--typography-display-font-weight);
+  letter-spacing: var(--typography-display-letter-spacing);
+  line-height: var(--typography-display-line-height);
+}

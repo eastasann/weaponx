@@ -1,0 +1,15 @@
+{
+  "name": "@weaponx/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun scripts/dev.ts",
+    "start": "bun src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.0",
+    "@weaponx/shared": "workspace:*",
+    "elysia": "^1.4.0"
+  }
+}

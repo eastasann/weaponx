@@ -1,2 +1,4 @@
 #!/usr/bin/env sh
-exec scripts/doc-lint.sh --staged
+set -e
+scripts/doc-lint.sh --staged
+make lint

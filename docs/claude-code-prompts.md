@@ -22,7 +22,7 @@ Claude Code のチャットに **1つずつ** コピペして使う。
 
 ## Step 1: モノレポ骨格 + 開発環境
 
-Status:
+Status: done 2026-09-30
 
 ```
 docs/03_dev-setup.md の 1章(ツールと Compose のサービス)・2章(リポジトリ構成)・3章(環境変数)・8章(Makefile)・10章(Linter)・11章(トラブルシューティング)と、
@@ -86,7 +86,10 @@ docs/design-spec.md 8章のデモデータを投入できるようにしてく�
    参考資料・タグ・変更メモ・削除済みの版・日付・created_via)。既存のデータは消してから入れる(03 4章)。
    案件の last_activity_at と系列の next_version_no を、入れたデータと整合させる
 6. make test の実体: テスト用 DB を作り直してマイグレーションを適用し、全ワークスペースの bun test を流す(03 7章)
+   (Step 1 で Makefile の test・db-reset は定義済み)
 7. 単体テスト: 4の正規化とリンクの判定(02-01 10章の単体の対象のうち、ここで作ったもの)
+8. Makefile の setup が持つ条件分岐(`if [ -f apps/api/scripts/migrate.ts ]`。Step 1 で migrate.ts が無い間だけ必要だった)を外し、db-migrate と db-seed を常に呼ぶ
+9. apps/api/src/lib/config.ts に DATABASE_URL の検証を足す(Step 1 では使う変数だけを検証している。APP_ORIGIN と TOKEN_ENCRYPTION_KEYS は Step 3、GOOGLE_* は Step 6 で足す)
 
 まだやらないこと: API のエンドポイント(Step 3〜5)。
 
@@ -94,6 +97,7 @@ docs/design-spec.md 8章のデモデータを投入できるようにしてく�
 - make clean の後の make setup が最後まで通る(Step 1 で残したマイグレーションとデモデータの投入を含む)
 - make db-reset でテーブルができてデモデータが入り、make db-studio で design-spec 8章の表どおりのデータが見える
 - make test が全パス
+- Makefile の setup に migrate.ts の有無で分ける条件分岐が残っていない
 ```
 
 ---
@@ -108,6 +112,7 @@ docs/05_operation-runbook.md 1章(ログの項目とレベル)、docs/design-spe
 API の土台と、利用者・案件・メンバーの API を実装してください。
 
 やること:
+0. apps/api/src/lib/config.ts に APP_ORIGIN(URL の形式)と TOKEN_ENCRYPTION_KEYS(`{鍵ID}:{32バイトの base64}` をカンマ区切り。形式だけ検証し、値はエラーに出さない)の検証を足す
 1. packages/shared: 入力の上限(design-spec 6.0.3 の値)と文字列の検証(前後の空白、改行、書記素で数える文字数)、
    エラーコードの一覧と design-spec 6.0.2 の分類(02-01 8章)
 2. API の共通部品(apps/api/src/lib/):
@@ -231,6 +236,7 @@ docs/02-01_system-design-doc.md の ADR-010・ADR-011・ADR-012・ADR-013、5.2�
 docs/design-spec.md 6.0.5・6.5.1、docs/05_operation-runbook.md 1章(event)に従って、Google のログインと本物のドライブを実装してください。
 
 やること:
+0. apps/api/src/lib/config.ts に GOOGLE_CLIENT_ID・GOOGLE_CLIENT_SECRET・GOOGLE_PICKER_API_KEY・GOOGLE_PROJECT_NUMBER の検証を足す(DRIVE_MODE=google のときだけ必須)
 1. apps/api/src/auth/: Arctic で Google の OAuth(PKCE・state・一時 Cookie)。
    - GET /api/auth/google/login(returnTo の検証、locale、consent)
    - GET /api/auth/google/callback(mode: login の手順1〜7。判定の順、リフレッシュトークンが返らないときの送り直し、失敗時の wx_login_notice)

@@ -29,7 +29,7 @@ Compose のサービス(`compose.yaml`):
 | サービス | イメージ | 役割 |
 |---------|---------|------|
 | `db` | `postgres:16` | 開発用 DB(`weaponx`)とテスト用 DB(`weaponx_test`)。:5432 |
-| `api` | `docker/dev.Dockerfile`(`oven/bun` ベース) | `bun --watch` で API を起動。:3000 |
+| `api` | `docker/dev.Dockerfile`(`oven/bun` ベース) | `apps/api/scripts/dev.ts` 経由で `bun --watch` を起動する(`WATCH_POLLING=true` のときは同じスクリプトがポーリングで変更を検知して再起動する)。:3000 |
 | `web` | 同上 | Vite の開発サーバー。:5173。`/api` を `api:3000` へ転送 |
 | `tools` | 同上 | 依存のインストール・テスト・Lint・マイグレーションなどの単発コマンド。Dev Container もここにつなぐ |
 | `e2e` | `mcr.microsoft.com/playwright`(Node.js 入り) | Playwright。`e2e` プロファイルのときだけ起動。レポートは :9323 |
@@ -64,7 +64,7 @@ weaponx/
 │   │   │   ├── auth/         # OAuth(Arctic)、セッション、トークンの暗号化
 │   │   │   └── lib/          # 設定、ログ、エラー
 │   │   ├── drizzle/          # マイグレーション(SQL)
-│   │   ├── scripts/          # migrate.ts, seed.ts, bootstrap-admin.ts
+│   │   ├── scripts/          # dev.ts(開発サーバー), migrate.ts, seed.ts, bootstrap-admin.ts
 │   │   ├── test/             # 結合テスト
 │   │   └── Dockerfile        # 本番のイメージ
 │   └── web/                  # React(Vite)
@@ -84,15 +84,18 @@ weaponx/
 │   └── production/version    # 本番で動くべきバージョン(9章)
 ├── docker/
 │   ├── dev.Dockerfile        # api / web / tools 用
-│   └── ops.Dockerfile        # Terraform + gcloud
+│   ├── ops.Dockerfile        # Terraform + gcloud
+│   └── db-init.sql           # テスト用 DB(weaponx_test)を作る
 ├── .devcontainer/            # VS Code の Dev Container
 ├── .githooks/                # pre-commit
 ├── .github/                  # workflows、PULL_REQUEST_TEMPLATE.md
 ├── scripts/                  # gen-tokens.ts, doc-lint.sh
 ├── docs/
 ├── compose.yaml
+├── .dockerignore             # API のイメージのビルドに入れないもの
 ├── Makefile
 ├── biome.json
+├── tsconfig.base.json        # 各ワークスペースの tsconfig が継承する共通設定
 ├── package.json              # Bun のワークスペース
 └── .env.example
 ```
@@ -331,7 +334,7 @@ fix/xxx    ──squash──▶   │
 
 | ツール | 設定 |
 |--------|------|
-| Biome(Lint + 整形) | `biome.json`。インデント2スペース、行幅100、ダブルクオート、`import` の並べ替えを有効。`apps/web/src/styles/tokens.css` と `apps/api/drizzle/` は対象外 |
+| Biome(Lint + 整形) | `biome.json`。インデント2スペース、行幅100、ダブルクオート、`import` の並べ替えを有効。`apps/web/src/styles/tokens.css`・`apps/api/drizzle/`・TanStack Router の生成物 `routeTree.gen.ts` は対象外 |
 | TypeScript(型チェック) | 各ワークスペースの `tsconfig.json`。`strict: true`、`noUncheckedIndexedAccess: true`。`make typecheck` で確かめる |
 | git フック | `.githooks/pre-commit` で `scripts/doc-lint.sh --staged`(先送りマーカー・シークレット・文体の検出)と `make lint` を実行(`make setup` が `core.hooksPath` を設定) |
 
@@ -343,7 +346,7 @@ fix/xxx    ──squash──▶   │
 |------|--------|
 | `make dev` でポートが使用中(5432 / 3000 / 5173 / 4983) | 手元で動いている PostgreSQL や別の開発サーバーを止める。どうしても変えるときは `compose.yaml` の公開ポートを変える |
 | コンテナの中の `bun install` やイメージのビルドが `SELF_SIGNED_CERT_IN_CHAIN`・`certificate verify failed` で失敗する | 通信を検査するネットワークにいる。その証明書(PEM)のパスを `.env` の `EXTRA_CA_CERT` に入れ(3章)、`make setup` をやり直す |
-| Mac で保存しても画面・API が再読み込みされない | Docker Desktop の設定でファイル共有を VirtioFS にする。それでも検知しないときは `.env` に `WATCH_POLLING=true` を足して `make dev` をやり直す(Vite と `bun --watch` がポーリングに切り替わる) |
+| Mac で保存しても画面・API が再読み込みされない | Docker Desktop の設定でファイル共有を VirtioFS にする。それでも検知しないときは `.env` に `WATCH_POLLING=true` を足して `make dev` をやり直す(Vite と API の開発サーバー(`apps/api/scripts/dev.ts`)がポーリングに切り替わる) |
 | 依存が壊れた・手元で `bun install` を実行してしまった | `make clean` のあと `make setup`。`node_modules` はコンテナ(Linux)用なので、手元では依存をインストールしない |
 | 手元の VS Code で Biome・型チェックが動かない | `node_modules` は Linux 用なので、手元のエディタからは使えないことがある。Dev Container(「Reopen in Container」)で開く |
 | Linux で、コンテナが作ったファイルの持ち主が root になる | `.env` に `UID` と `GID`(`id -u` / `id -g` の値)を入れる。`compose.yaml` はこれでコンテナの利用者を合わせる |

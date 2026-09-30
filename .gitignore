@@ -1,0 +1,13 @@
+.env
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+playwright-report/
+test-results/
+blob-report/
+.terraform/
+*.tfstate
+*.tfstate.*
+.DS_Store
