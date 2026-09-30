@@ -25,6 +25,7 @@
 | [04_deployment-procedure.md](04_deployment-procedure.md) | 初回のクラウド設定、CI/CD、リリース前チェック、ロールバック |
 | [05_operation-runbook.md](05_operation-runbook.md) | ログ・アラート、よくある障害と対処、定期メンテナンス、KPI の測り方 |
 | [06_design-tokens.json](06_design-tokens.json) | デザイントークン(DTCG 形式。色はライト・ダークの2組) |
+| [claude-code-prompts.md](claude-code-prompts.md) | 実装のステップ別プロンプト集(派生。進捗は各ステップの `Status:` 行) |
 | [concept.md](concept.md) | Phase 0 のコンセプトメモ(経緯の記録) |
 | [brainstorm-notes.md](brainstorm-notes.md) | Phase 1 の壁打ちメモ(経緯の記録。冒頭に Phase 2 での見直し) |
 
@@ -35,7 +36,7 @@
 | 層 | ファイル | 扱い |
 |----|---------|------|
 | ソース(正) | `design-spec.md`、`screen_flow.mermaid`、`01_prd.md`、`02-01_system-design-doc.md`、`03_dev-setup.md`、`04_deployment-procedure.md`、`05_operation-runbook.md`、`06_design-tokens.json` | 事実を持つ。変更はここを直す |
-| 派生 | `CLAUDE.md`、`docs/claude-code-prompts.md`(Phase 4 で作る)、`apps/web/src/styles/tokens.css`(`make tokens` で生成) | ソースから作る。直接直さず、ソースを直して作り直す |
+| 派生 | `CLAUDE.md`(`AGENTS.md` はそのリンク)、`docs/claude-code-prompts.md`、`apps/web/src/styles/tokens.css`(`make tokens` で生成) | ソースから作る。直接直さず、ソースを直して作り直す |
 | アーカイブ | `concept.md`、`brainstorm-notes.md`、実装済みの `features/` の Feature Design Doc | 経緯の記録。後から書き換えない。食い違ったらソースが正 |
 
 ### 事実の所有権

@@ -332,7 +332,7 @@ fix/xxx    ──squash──▶   │
 |--------|------|
 | Biome(Lint + 整形) | `biome.json`。インデント2スペース、行幅100、ダブルクオート、`import` の並べ替えを有効。`apps/web/src/styles/tokens.css` と `apps/api/drizzle/` は対象外 |
 | TypeScript(型チェック) | 各ワークスペースの `tsconfig.json`。`strict: true`、`noUncheckedIndexedAccess: true`。`make typecheck` で確かめる |
-| git フック | `.githooks/pre-commit` で `make lint` を実行(`make setup` が `core.hooksPath` を設定) |
+| git フック | `.githooks/pre-commit` で `scripts/doc-lint.sh --staged`(先送りマーカー・シークレット・文体の検出)と `make lint` を実行(`make setup` が `core.hooksPath` を設定) |
 
 ---
 
