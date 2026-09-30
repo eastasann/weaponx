@@ -64,7 +64,7 @@ graph TD
     CASE -->|"メンバー n人"| MEMBER
 
     CASE -.->|"要再連携の帯・失敗表示の<br/>「もう一度連携する」"| EXT_CONSENT
-    EXT_CONSENT -.->|"許可・取り消し(元の画面へ戻る)"| CASE
+    EXT_CONSENT -.->|"結果によらず元の画面へ戻る"| CASE
 
     MEMBER -->|"+ メンバーを招待(オーナー)"| DLG_INVITE
     DLG_INVITE -->|"招待"| MEMBER
