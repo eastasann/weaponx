@@ -142,6 +142,7 @@ make dev
 | `TOKEN_ENCRYPTION_KEYS` | `local:{32バイトの base64}` | Google のリフレッシュトークンの暗号化鍵(ADR-012) |
 | `WATCH_POLLING` | 空 | `true` にすると Vite と `bun --watch` がファイルの変更をポーリングで検知する(11章) |
 | `UID` / `GID` | 空 | Linux で、コンテナが作るファイルの持ち主を手元の利用者に合わせる(11章) |
+| `EXTRA_CA_CERT` | 空 | コンテナの中から外へ HTTPS でつなぐときに追加で信頼する証明書(PEM)の、手元のパス。通信を検査するネットワーク(会社のプロキシ、クラウドの開発環境)でだけ入れる。Compose はこのファイルを全コンテナに読み取り専用で渡し、Bun・Node(`NODE_EXTRA_CA_CERTS`)と gcloud・Terraform が信頼するようにする。イメージのビルドにも BuildKit の secret で渡す(イメージには残さない)。空なら何もしない。シェルの環境変数でも渡せる(Compose は `.env` よりシェルの値を優先する)(11章) |
 
 本番の値の入れ方は `docs/04_deployment-procedure.md` 3章。
 
@@ -341,6 +342,7 @@ fix/xxx    ──squash──▶   │
 | 問題 | 解決策 |
 |------|--------|
 | `make dev` でポートが使用中(5432 / 3000 / 5173 / 4983) | 手元で動いている PostgreSQL や別の開発サーバーを止める。どうしても変えるときは `compose.yaml` の公開ポートを変える |
+| コンテナの中の `bun install` やイメージのビルドが `SELF_SIGNED_CERT_IN_CHAIN`・`certificate verify failed` で失敗する | 通信を検査するネットワークにいる。その証明書(PEM)のパスを `.env` の `EXTRA_CA_CERT` に入れ(3章)、`make setup` をやり直す |
 | Mac で保存しても画面・API が再読み込みされない | Docker Desktop の設定でファイル共有を VirtioFS にする。それでも検知しないときは `.env` に `WATCH_POLLING=true` を足して `make dev` をやり直す(Vite と `bun --watch` がポーリングに切り替わる) |
 | 依存が壊れた・手元で `bun install` を実行してしまった | `make clean` のあと `make setup`。`node_modules` はコンテナ(Linux)用なので、手元では依存をインストールしない |
 | 手元の VS Code で Biome・型チェックが動かない | `node_modules` は Linux 用なので、手元のエディタからは使えないことがある。Dev Container(「Reopen in Container」)で開く |

@@ -42,7 +42,7 @@ docs/02-01_system-design-doc.md の ADR-002・ADR-005・ADR-018・ADR-020・ADR-
 6. packages/shared: package.json と tsconfig(中身は Step 2 から)
 7. docker/dev.Dockerfile、docker/ops.Dockerfile、compose.yaml(db・api・web・tools、プロファイル e2e の e2e、
    プロファイル ops の ops)。db は開発用の weaponx とテスト用の weaponx_test を作る。
-   UID/GID と WATCH_POLLING に対応する(03 3章・11章)。ツールの版は 03 1章の場所で固定する
+   UID/GID・WATCH_POLLING・EXTRA_CA_CERT(コンテナとイメージのビルドに追加の証明書を渡す)に対応する(03 3章・11章)。ツールの版は 03 1章の場所で固定する
 8. .env.example(03 3章の全変数)、.gitignore(.env、node_modules、ビルド成果物、Playwright のレポート)
 9. biome.json(03 10章の設定。tokens.css と apps/api/drizzle/ は対象外)
 10. scripts/gen-tokens.ts: docs/06_design-tokens.json から apps/web/src/styles/tokens.css を生成する(ADR-020 の書き出し方。
