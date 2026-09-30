@@ -16,11 +16,8 @@
 
 ### Non-Goal
 
-- リアルタイム更新(他の人の変更は再読み込みで反映する。design-spec 6.0.6 の後勝ち)
-- 本文の保存・全文検索、関連の推測(design-spec 1.2)
-- 公開 API・外部クライアント(API は画面専用)
-- ステージング環境、複数リージョン、ゼロダウンタイムを保証するマイグレーション基盤(ADR-016)
-- 1案件数百系列を超える規模への最適化(ページ分けは design-spec 9章の拡張候補)
+- プロダクトとして作らないもの: `docs/01_prd.md` 6章
+- 技術面で持たないもの: リアルタイム通信の基盤(WebSocket・SSE)、ステージング環境、複数リージョン、ゼロダウンタイムを保証するマイグレーション基盤(ADR-016)、design-spec 1.2 の想定規模を超える性能の最適化
 
 ---
 
@@ -51,7 +48,7 @@
 
 | 流れ | 経路 |
 |------|------|
-| 画面の読み込み | ブラウザ → LB → バックエンドバケット。`/assets/*` はファイル名にハッシュを含み、1年キャッシュ。それ以外のパス(`/`, `/projects/...` 等)は URL マップで `/index.html` に書き換える(SPA のフォールバック)。`index.html` はキャッシュしない |
+| 画面の読み込み | ブラウザ → LB → バックエンドバケット。`/assets/*` はそのまま、それ以外のパス(`/`, `/projects/...` 等)は URL マップで `/index.html` に書き換える(SPA のフォールバック)。キャッシュの方針は7章「パフォーマンス」 |
 | API | ブラウザ(Eden Treaty)→ LB → Cloud Armor(レート制限)→ Cloud Run。セッションは Cookie、状態は PostgreSQL。どのインスタンスに振り分けられても同じ結果になる |
 | ログイン | ブラウザ → `/api/auth/google/login` → Google の同意画面 → `/api/auth/google/callback` → セッション作成 → 元の URL(5.2) |
 | ドライブ操作 | Cloud Run → Google Drive API v3(REST)。リフレッシュトークンは暗号化して `drive_connections` に保存し、アクセストークンは Cloud Run のインスタンスのメモリにだけキャッシュする(失っても取り直すだけ。ADR-013) |
@@ -72,27 +69,27 @@
 
 ### ADR-001: アプリの形は「SPA + 独立 API」、同じオリジンに置く
 
-**決定:** 画面は React の SPA、API は Elysia のサーバーとして分ける。どちらもロードバランサーの後ろの同じドメインに置き、パス(`/api/*` とそれ以外)で振り分ける。
+**決定:** 画面は React の SPA、API は Elysia のサーバーとして分ける。どちらもロードバランサーの後ろの同じドメインに置き、パス(`/api/*` とそれ以外)で振り分ける。画面の静的ファイルは Cloud Storage から配る。
 
-**理由:** API に Elysia を使うこと(ADR-003)が利用者の希望で、React のフルスタック FW(Next.js 等)とは同居させにくい。案件画面は横パネル・絞り込み・タグ入力・URL への選択状態の反映など、画面側の状態が多く、SPA が向く。同じオリジンにすれば CORS が要らず、Cookie のセッションをそのまま使える。
+**理由:** API に Elysia を使うこと(ADR-003)が利用者の希望で、React のフルスタック FW(Next.js 等)とは同居させにくい。案件画面は横パネル・絞り込み・タグ入力・URL への選択状態の反映など、画面側の状態が多く、SPA が向く。同じオリジンにすれば CORS が要らず、Cookie のセッションをそのまま使える。静的ファイルを CDN 付きのバケットから配ると、Cloud Run が冷えていても画面の読み込みは待たされない。
 
-**トレードオフ:** 画面と API を別々に配る(Cloud Storage と Cloud Run)ので、デプロイで順番を守る必要がある(`docs/04_deployment-procedure.md`)。SEO は捨てる(ログイン必須のアプリなので不要)。
+**トレードオフ:** 画面と API を別々に配る(Cloud Storage と Cloud Run)ので、デプロイで順番を守る必要がある(`docs/04_deployment-procedure.md` 2章)。SEO は捨てる(ログイン必須のアプリなので不要)。捨てた案: Next.js 等のフルスタック FW(Elysia と同居させにくい)、Elysia が SPA の静的ファイルも配る1サービスの構成(デプロイの順番の問題は無くなるが、最小インスタンス0だと冷えた状態からの起動の遅れが画面の読み込みにも出る。CDN も API と同じ経路になり、ロードバランサーでパスを振り分ける意味が薄れる)。
 
 ### ADR-002: 言語は TypeScript、実行環境は Bun、1つのリポジトリにまとめる
 
-**決定:** API・画面・共有コードを TypeScript で書き、Bun のワークスペースで1つのリポジトリにまとめる(`apps/api`、`apps/web`、`packages/shared`)。
+**決定:** API・画面・共有コードを TypeScript で書き、Bun のワークスペースで1つのリポジトリにまとめる(`apps/api`、`apps/web`、`packages/shared`)。Google の API は公式 SDK(googleapis)を使わず、`fetch` で REST を直接呼ぶ。
 
-**理由:** Elysia は Bun 向けに作られている。入力の上限・名前の正規化・リンクの種別判定・エラーコードを `packages/shared` に置き、画面と API で同じ規則を使える(design-spec 6.0.3・6.0.4)。
+**理由:** Elysia は Bun 向けに作られている。入力の上限・名前の正規化・リンクの種別判定・エラーコードを `packages/shared` に置き、画面と API で同じ規則を使える(design-spec 6.0.3・6.0.4)。Eden Treaty(ADR-004)は API の型を画面から import するので、同じリポジトリにあると素直に使える。使う Drive API は数本(ファイルの取得・作成・コピー)なので、SDK の大きな依存を持ち込まない。
 
-**トレードオフ:** Node.js 専用のライブラリの一部は Bun で動かないことがある。Google の公式 SDK(googleapis)は使わず、Drive API は `fetch` で直接呼ぶ(依存を小さくし、Bun での互換性の心配を避ける)。Playwright は Node.js で動かす(公式の Docker イメージを使う。ADR-021)。
+**トレードオフ:** Node.js 専用のライブラリの一部は Bun で動かないことがある。Playwright は Node.js で動かす(公式の Docker イメージを使う。ADR-021)。捨てた案: Node.js で動かす(Elysia には Node 用のアダプターがあるが、Bun 向けの速さと組み込みのテストランナー・パッケージ管理を活かせない)、API と画面でリポジトリを分ける(`packages/shared` と Eden の型を共有しにくい)。
 
 ### ADR-003: API のフレームワークは Elysia.js
 
 **決定:** API は Elysia.js で書く。入力の検証は Elysia 組み込みの TypeBox(`t`)を使う。
 
-**理由:** 利用者の希望。Bun のネイティブな HTTP サーバーの上で速く動き、ルートの型から画面側の型付きクライアント(Eden Treaty、ADR-004)を作れる。検証のスキーマがそのまま型になる。
+**理由:** 利用者の希望。Bun のネイティブな HTTP サーバーの上で速く動き、ルートの型から画面側の型付きクライアント(Eden Treaty、ADR-004)を作れる。TypeBox は Elysia の標準で、検証のスキーマがそのまま型と Eden の入出力の型になる。
 
-**トレードオフ:** Hono・Express に比べてエコシステムが小さく、事例が少ない。Bun 以外で動かす道は細い。捨てた案: Hono(軽くどこでも動くが、利用者の希望ではない)、NestJS(1人開発には構造が重い)。
+**トレードオフ:** Hono・Express に比べてエコシステムが小さく、事例が少ない。Bun 以外で動かす道は細い。TypeBox は Zod より書き方が冗長で、画面のフォームでは直接使いにくい(画面の即時の検証は `packages/shared` の定数と関数で行う)。捨てた案: Hono(軽くどこでも動くが、利用者の希望ではない)、NestJS(1人開発には構造が重い)、検証に Zod(Elysia でも使えるが、標準の TypeBox の方が Eden の型とずれない)。
 
 ### ADR-004: 通信方式は REST(JSON)+ Eden Treaty
 
@@ -106,41 +103,50 @@
 
 **決定:** React(Vite でビルド)、ルーティングは TanStack Router、サーバーの状態は TanStack Query、見た目は Tailwind CSS v4、ダイアログ・メニュー・ポップオーバーは Radix UI のプリミティブで作る。
 
-**理由:** TanStack Router は URL の検索パラメーター(選んだ系列・版、検索語)を型付きで扱える(design-spec 6.1「URL にも選んだ系列と版を反映」)。TanStack Query で、操作の後の再読み込み(design-spec 6.0.1・6.0.2)を宣言的に書ける。Radix UI でダイアログのフォーカス管理と Esc キーを正しく扱える。Tailwind のテーマは `docs/06_design-tokens.json` から生成した CSS 変数を参照する(ADR-020)。
+**理由と捨てた案(部品ごと):**
+
+| 部品 | 理由 | 捨てた案 |
+|------|------|---------|
+| React | 部品と周辺ライブラリ(TanStack・Radix・i18next)が最もそろい、AI での実装の事例も多い | Vue・Svelte(小さく書けるが、上の周辺ライブラリの組み合わせが薄い) |
+| Vite | SPA のビルドと開発サーバーの標準。Bun の上でも動く | Bun の組み込みバンドラー(開発サーバーと HMR がまだ Vite ほど枯れていない) |
+| TanStack Router | URL の検索パラメーター(選んだ系列・版、検索語)を型付きで扱える(design-spec 6.1「URL にも選んだ系列と版を反映」) | React Router(検索パラメーターの型付けが弱い) |
+| TanStack Query | 操作の後の再読み込み(design-spec 6.0.1・6.0.2)を、キャッシュの無効化として宣言的に書ける | SWR(変更系の扱いが薄い)、自前の状態管理 |
+| Tailwind CSS v4 | `@theme` で `docs/06_design-tokens.json` から生成した CSS 変数をそのまま使える(ADR-020)。高密度の表を少ない記述で組める | CSS Modules(トークンは使えるが、高密度の表の記述量が増える)、MUI 等の部品ライブラリ(下のトレードオフ) |
+| Radix UI | ダイアログのフォーカス管理・Esc キー・背面の操作不可(design-spec 4.1 のパターン D)を正しく扱える。見た目を持たないので Tailwind と組み合わせやすい | Headless UI(部品の種類が少ない) |
 
 **トレードオフ:** 部品ライブラリ(MUI 等)を使わないので、表やタグ入力は自作する。見た目の自由度と高密度の表(design-spec 4.4)を優先した。
 
-### ADR-006: クラウドは GCP
+### ADR-006: クラウドは GCP(asia-northeast1、Cloud Run)
 
 **決定:** GCP の Cloud Run(API)、Cloud Storage(画面)、Cloud SQL(DB)、外部アプリケーション ロードバランサーで動かす。リージョンは asia-northeast1(東京)。
 
-**理由:** ロードバランサーを自分で組む構成(利用者の希望)を、Cloud Run のサーバーレス NEG で素直に作れる。Google ログインとドライブ連携の設定(OAuth 同意画面・クライアント・Picker の API キー)はどのクラウドを選んでも GCP で行うので、管理画面を1つにまとめられる。Cloud Run は使った分だけの課金で、アイドル時はほぼ無料。
+**理由:** ロードバランサーを自分で組む構成(利用者の希望)を、Cloud Run のサーバーレス NEG で素直に作れる。Google ログインとドライブ連携の設定(OAuth 同意画面・クライアント・Picker の API キー)はどのクラウドを選んでも GCP で行うので、管理画面を1つにまとめられる。Cloud Run は使った分だけの課金で、アイドル時はほぼ無料。利用者は日本にいるので、東京リージョンで遅延を小さくする。
 
-**トレードオフ:** ロードバランサーの転送ルールに月 約 $18 の固定費がかかる(Cloud Run の既定 URL だけなら不要な費用)。捨てた案: AWS(ALB + ECS Fargate + RDS。実績とサービスの幅は最大だが、止まらない構成で月 $50〜100、Google の設定のために GCP にも触る)、Fly.io(月 $5〜10 と安いが、ロードバランサーが組み込みで、自分で組む構成にならない)。
+**トレードオフ:** ロードバランサーの転送ルールに月 約 $18 の固定費がかかる(Cloud Run の既定 URL だけなら不要な費用)。東京は us-central1 より単価が少し高い(この規模では月 $1〜2 の差)。捨てた案: AWS(ALB + ECS Fargate + RDS。実績とサービスの幅は最大だが、止まらない構成で月 $50〜100、Google の設定のために GCP にも触る)、Fly.io(月 $5〜10 と安いが、ロードバランサーが組み込みで、自分で組む構成にならない)。GCP の中では GKE Autopilot・Compute Engine(常に動くノードの費用と運用が要る。この規模では Cloud Run で足りる)。
 
 ### ADR-007: ロードバランサーでパスを振り分け、Cloud Armor でレート制限する
 
 **決定:** グローバル外部アプリケーション ロードバランサーを置き、URL マップで `/api/*` を Cloud Run(サーバーレス NEG)へ、それ以外を Cloud Storage のバックエンドバケット(Cloud CDN 有効)へ振り分ける。証明書は Google マネージド、HTTP は HTTPS へ転送する。`/api/*` のバックエンドに Cloud Armor のポリシーを付け、IP ごとのレート制限をかける。Cloud Run の受信は「内部と Cloud Load Balancing」に限り、`run.app` の URL から直接は呼べなくする。
 
-**理由:** 入口を1つにすることで、同じオリジン(ADR-001)、証明書の自動更新、CDN、レート制限を1か所で扱える。ログインの入口(`/api/auth/*`)は認証前に誰でも叩けるので、アプリより手前で絞る。
+**理由:** 利用者の希望(「ロードバランサーまで載せたい」)。入口を1つにすることで、同じオリジン(ADR-001)、証明書の自動更新、CDN、レート制限を1か所で扱える。ログインの入口(`/api/auth/*`)は認証前に誰でも叩けるので、アプリより手前で絞る。レート制限をロードバランサーで行えば、Cloud Run が何台になっても IP ごとの数え方がそろう。
 
-**トレードオフ:** Cloud Armor に月 約 $7 かかる。不要と判断したら外せる(アプリ側の制限は持たないので、外すとログインの入口が無制限になる)。SPA のフォールバック(未知のパスを `/index.html` に書き換える)を URL マップのルートルールで書く必要がある。
+**トレードオフ:** Cloud Armor に月 約 $7 かかる。不要と判断したら外せる(アプリ側の制限は持たないので、外すとログインの入口が無制限になる)。SPA のフォールバック(未知のパスを `/index.html` に書き換える)を URL マップのルートルールで書く必要がある。捨てた案: Firebase Hosting の rewrites(同じオリジンと CDN を安く得られるが、ロードバランサーを自分で組む希望に合わず、Cloud Armor を付けられない)、Cloud Run のドメインマッピング(同上。パスの振り分けもできない)、アプリの中でのレート制限(複数台では台ごとに数えることになり、共有するには Redis 等が要る。1章の「メモリに正しさに関わる状態を持たない」に合わない)。
 
 ### ADR-008: DB は Cloud SQL for PostgreSQL 16
 
-**決定:** Cloud SQL(Enterprise、db-f1-micro、SSD 10GB、自動バックアップ7日 + ポイントインタイムリカバリ)を使う。Cloud Run からは組み込みの Cloud SQL 接続(Unix ソケット)でつなぎ、パブリック IP の承認済みネットワークは空にする。
+**決定:** Cloud SQL(Enterprise、db-f1-micro、SSD 10GB、自動バックアップ7日 + ポイントインタイムリカバリ)を使う。Cloud Run からは組み込みの Cloud SQL 接続(Unix ソケット)でつなぎ、パブリック IP の承認済みネットワークは空にする。版は PostgreSQL 16。
 
-**理由:** 参考資料・版・メンバーの関係と、同時操作の整合性(ADR-013)にはリレーショナル DB のトランザクションと行ロックが要る。アプリと同じクラウドの中でつながり、Terraform で管理できる。VPC を作らずに済み、構成が小さい。
+**理由:** 参考資料・版・メンバーの関係と、同時操作の整合性(ADR-013)にはリレーショナル DB のトランザクションと行ロックが要る。アプリと同じクラウドの中でつながり、Terraform で管理できる。VPC を作らずに済み、構成が小さい。版は、ローカル(`postgres:16` のイメージ)・CI と同じものを使い、Drizzle と `pg_trgm` の動作を確かめやすい安定した版にそろえる(17 に上げるのは、動作を確かめてからでよい)。
 
-**トレードオフ:** 使っていなくても月 約 $11 かかる。db-f1-micro は共有 CPU で最大接続数が少ない(約25)ので、接続プールを小さくする(7章)。捨てた案: Neon(無料枠があり止まるが、クラウドの外につなぐぶん遅延と管理場所が増える)。
+**トレードオフ:** 使っていなくても月 約 $11 かかる。db-f1-micro は共有 CPU で最大接続数が少ない(約25)ので、接続プールを小さくする(7章)。共有 CPU のマシンは Cloud SQL の SLA の対象外で、メンテナンスで数分止まることがある(自分用の MVP では受け入れる。困ったら専用 CPU のマシンに上げる)。捨てた案: Neon(無料枠があり止まるが、クラウドの外につなぐぶん遅延と管理場所が増える)。
 
-### ADR-009: ORM は Drizzle ORM(ドライバーは postgres.js)
+### ADR-009: ORM は Drizzle ORM(ドライバーは postgres.js)、マイグレーションは Cloud Run ジョブで流す
 
-**決定:** スキーマは Drizzle ORM で書き(6章)、マイグレーションは drizzle-kit で SQL ファイルとして生成してリポジトリに置く。ドライバーは postgres.js。
+**決定:** スキーマは Drizzle ORM で書き(6章)、マイグレーションは drizzle-kit で SQL ファイルとして生成してリポジトリに置く。ドライバーは postgres.js。本番のマイグレーションは、API と同じイメージの Cloud Run ジョブ `weaponx-migrate` で、デプロイのたびに1回だけ流す(`docs/04_deployment-procedure.md` 2章)。
 
-**理由:** SQL に近い書き方で、行ロック(`FOR UPDATE`)、部分一意インデックス、ウィンドウ関数を素直に書ける。コード生成の工程が無く、Bun で軽く動く。生成されるマイグレーションが SQL なので、レビューしやすい。
+**理由:** SQL に近い書き方で、行ロック(`FOR UPDATE`)、部分一意インデックス、ウィンドウ関数を素直に書ける。コード生成の工程が無く、Bun で軽く動く。生成されるマイグレーションが SQL なので、レビューしやすい。postgres.js は Drizzle が正式に対応するドライバーの中で、Unix ソケット(Cloud SQL 接続)・トランザクション・接続プールの実績が最も多く、Bun でも動く。マイグレーションを API の起動時に流すと、複数台が同時に流しかねないので、ジョブに分ける。
 
-**トレードオフ:** Prisma に比べて、リレーションをまたぐ取得は自分で書く量が増える。拡張(`pg_trgm`)の作成など、一部は手書きのマイグレーション(`drizzle-kit generate --custom`)になる。
+**トレードオフ:** Prisma に比べて、リレーションをまたぐ取得は自分で書く量が増える。拡張(`pg_trgm`)の作成など、一部は手書きのマイグレーション(`make db-generate CUSTOM=1`)になる。捨てた案: Prisma(コード生成の工程が要り、行ロックや advisory lock は生の SQL になる)、Kysely(型付きの SQL ビルダーとして優秀だが、マイグレーションの生成を持たない)、ドライバーに Bun.sql(Bun 組み込みで速いが、まだ新しく、Cloud SQL の Unix ソケットでの事例が少ない)・node-postgres(Bun での動作報告が postgres.js より少ない)。
 
 ### ADR-010: ログインは Google OAuth を自前で扱い(Arctic)、セッションは DB に持つ
 
@@ -162,7 +168,7 @@
 
 **決定:** `drive_connections.credentials` にはリフレッシュトークンだけを、AES-256-GCM で暗号化して保存する。形式は `{鍵ID}:{IV}:{暗号文}:{タグ}`(各 base64url)。鍵は環境変数 `TOKEN_ENCRYPTION_KEYS`(Secret Manager から注入)に `{鍵ID}:{base64の32バイト},...` で並べ、先頭を暗号化に使い、すべてを復号に使う。
 
-**理由:** DB のバックアップや SQL が漏れても、トークンだけでは使えないようにする。鍵 ID を付けておくと、鍵を入れ替えるときに古い暗号文も読める(手順は `docs/05_operation-runbook.md`)。暗号化・復号がアプリの中で終わるので、Drive を呼ぶたびに外部サービスを待たない。
+**理由:** DB のバックアップや SQL が漏れても、トークンだけでは使えないようにする。鍵 ID を付けておくと、鍵を入れ替えるときに古い暗号文も読める。先頭以外の鍵で復号できたときは、先頭の鍵で暗号化し直して保存する(Drive を使うたびに少しずつ入れ替わる。手順は `docs/05_operation-runbook.md` 6章)。暗号化・復号がアプリの中で終わるので、Drive を呼ぶたびに外部サービスを待たない。
 
 **トレードオフ:** 鍵が環境変数としてアプリのメモリに載る。Cloud KMS で毎回復号する案より鍵の保護は弱いが、呼び出しごとの遅延と費用、構成の複雑さを避けた。
 
@@ -172,33 +178,33 @@
 
 | 規則 | 仕組み |
 |------|--------|
-| 版番号の採番 | `UPDATE document_series SET next_version_no = next_version_no + 1 ... RETURNING` で系列の行をロックして採番し、版の追加と同じトランザクションで確定する |
+| 版番号の採番 | `UPDATE document_series SET next_version_no = next_version_no + 1 WHERE id = $1 RETURNING next_version_no - 1 AS version_no` で系列の行をロックして採番し、版の追加と同じトランザクションで確定する。系列を作るときは `next_version_no = 2` で作り、最初の版を1番にする |
 | リンクの重複 | 部分一意インデックス `(project_id, link_key) WHERE deleted_at IS NULL`。違反(23505)を `DUPLICATE_LINK` に変換する |
 | オーナーが1人以上 | 案件の行を `SELECT ... FOR UPDATE` でロックしてから、オーナーの数を数えて変更する |
-| 管理者が1人以上 | `pg_advisory_xact_lock` の固定キーで管理者の変更を直列にしてから、有効な管理者の数を数えて変更する |
-| 参考資料20件・タグ5件 | 版の行を `FOR UPDATE` でロックしてから、数えて書き込む |
+| 管理者が1人以上 | `pg_advisory_xact_lock` の固定キーで管理者の変更を直列にしてから、有効な管理者の数を数えて変更する(「管理者全体」を表す1行が無いので、行ロックの代わりに使う) |
+| 参考資料・タグの件数の上限(design-spec 6.0.3) | 版の行を `FOR UPDATE` でロックしてから、数えて書き込む |
 
 Google のアクセストークン(1時間有効)だけは、インスタンスのメモリにキャッシュする。失っても、リフレッシュトークンから取り直すだけで結果は変わらない。
 
-**理由:** ロードバランサーの後ろで複数台が同時に処理しても、規則が破れないようにする。
+**理由:** ロードバランサーの後ろで複数台が同時に処理しても、規則が破れないようにする。守りたい規則はどれも「1つの行(系列・案件・版)か、管理者全体」の単位なので、その単位のロックを取れば、衝突したときも待つだけで、やり直しの処理が要らない(design-spec 6.0.6「後から処理された側は次の番号で成功する」)。
 
-**トレードオフ:** 採番と変更のたびに行ロックを取るので、同じ系列・案件への同時の書き込みは直列になる。この規模では問題にならない。
+**トレードオフ:** 採番と変更のたびに行ロックを取るので、同じ系列・案件への同時の書き込みは直列になる。この規模では問題にならない。捨てた案: SERIALIZABLE の分離レベル + 再試行(すべての書き込みに再試行の処理が要る)、楽観的ロック(採番や上限の確認が、衝突のたびにやり直しになる)、Memorystore(Redis)の分散ロック(固定費が月 $30 以上かかり、DB と別の整合性を持ち込む)、アプリのメモリの中の排他(複数台では効かない)。
 
 ### ADR-014: i18n は react-i18next と JSON の翻訳ファイル
 
-**決定:** 画面の文言は react-i18next で管理し、翻訳ファイルは `apps/web/src/locales/{ja,en}.json`。日時・並べ替えはブラウザの `Intl`(`DateTimeFormat`・`Collator`・`PluralRules`)で行う。API は文言を返さず、エラーコードだけを返す(8章)。詳細は9章。
+**決定:** 画面の文言は react-i18next で管理し、翻訳ファイルは `apps/web/src/locales/{ja,en}.json`。日時・並べ替えはブラウザの `Intl`(`DateTimeFormat`・`Collator`・`PluralRules`)で行う。API は画面に出す文言を返さず、エラーコードを返す(8章)。詳細は9章。
 
-**理由:** design-spec 1.2 の2言語と、英語の単数・複数の区別に、i18next の複数形の仕組み(`_one` / `_other`)がそのまま使える。
+**理由:** 入れ子のキーの JSON が、画面・部品ごとにキーを分ける設計(9章)にそのまま合い、抽出やコンパイルの工程が要らない。TypeScript でキーに型を付けられ、キーの書き間違いをコンパイル時に見つけられる。英語の単数・複数(design-spec 1.2)は `Intl.PluralRules` に基づく `_one` / `_other` で扱える。
 
-**トレードオフ:** 翻訳ファイルのキーの抜けは実行するまで分からないので、テストで日英のキーの一致を確かめる(10章)。
+**トレードオフ:** 翻訳ファイルのキーの抜けは実行するまで分からないので、テストで日英のキーの一致を確かめる(10章)。捨てた案: react-intl(ICU メッセージ形式は日英2言語の単純な文言には重い)、Lingui・Paraglide(文言の抽出やコンパイルの工程が要る)。
 
-### ADR-015: IaC は Terraform、CI/CD は GitHub Actions + Workload Identity 連携
+### ADR-015: IaC は Terraform、state は GCS
 
-**決定:** GCP のリソースは Terraform で管理する。CI/CD は GitHub Actions で、GCP への認証はサービスアカウントの鍵を使わず Workload Identity 連携で行う。リリースは `deploy/production/version` の更新をきっかけにする(`docs/03_dev-setup.md` 9章)。
+**決定:** GCP のリソースは Terraform で管理する。state は GCS のバケット `{PROJECT_ID}-tfstate`(バージョニング有効)に置く。Terraform で作らないもの(プロジェクト、tfstate のバケット、OAuth の設定、秘密の値)は2章「インフラ管理」のとおり。
 
-**理由:** ロードバランサー・Cloud Armor・Cloud SQL など構成要素が多く、手作業では再現できない。鍵ファイルを GitHub に置かないで済む。
+**理由:** ロードバランサー・Cloud Armor・Cloud SQL・Workload Identity など構成要素が多く、手作業では再現できない。Terraform は GCP の対応が最も厚く、事例が多い。GCS の backend は state のロックを組み込みで持ち、同じプロジェクトの中に置ける。
 
-**トレードオフ:** Terraform の学習と、初回の手作業(`docs/04_deployment-procedure.md` の Step 1)が要る。
+**トレードオフ:** Terraform の学習と、初回の手作業(`docs/04_deployment-procedure.md` 3章 Step 1)が要る。Cloud Run のイメージはデプロイ(ADR-022)が更新するので、Terraform はイメージの変更を無視する(`lifecycle.ignore_changes`)。捨てた案: Pulumi(TypeScript で書けるが、GCP の事例が Terraform より少ない)、OpenTofu(Terraform とほぼ同じで、選ぶ理由が今は無い)、gcloud のスクリプト(差分の確認と、やり直しの安全さが無い)。
 
 ### ADR-016: 環境はローカルと本番の2つ(ステージングは持たない)
 
@@ -206,15 +212,15 @@ Google のアクセストークン(1時間有効)だけは、インスタンス�
 
 **理由:** 自分用の MVP で、利用者は作者と職場の数人。ステージングを作ると、ロードバランサーと DB の固定費がほぼ倍になる。
 
-**トレードオフ:** 本番の Google と Drive でしか確かめられないこと(同意画面・Picker・実際のコピー)は、本番で確かめることになる。リリースの前に確かめる項目は `docs/04_deployment-procedure.md` のチェックリストに置く。マイグレーションは、1つ前の版のアプリでも動く追加的な変更に限る(`docs/04_deployment-procedure.md` 5章)。
+**トレードオフ:** 本番の Google と Drive でしか確かめられないこと(同意画面・Picker・実際のコピー)は、本番で確かめることになる。リリースの前に確かめる項目は `docs/04_deployment-procedure.md` のチェックリストに置く。マイグレーションは、1つ前の版のアプリでも動く追加的な変更に限る(`docs/04_deployment-procedure.md` 5章)。捨てた案: 同じ LB と Cloud SQL インスタンスに相乗りするステージング(費用は小さいが、本番と設定を分ける手間と、取り違えて本番の DB を触る危険が増える)。
 
 ### ADR-017: テストは bun test と Playwright。開発用ログインとドライブの模擬で Google なしに回す
 
-**決定:** 単体・結合テストは `bun test`、E2E は Playwright。結合テストと E2E は実物の PostgreSQL(Docker)を使う。Google は、開発用ログイン(`DEV_LOGIN_ENABLED=true`)と、ドライブの模擬(`DRIVE_MODE=mock`)に置き換える(design-spec 8章)。
+**決定:** 単体・結合テストは `bun test`、画面の部品のテストは `bun test` + Testing Library(happy-dom)、E2E は Playwright。結合テストと E2E は実物の PostgreSQL(Docker)を使う。Google は、開発用ログイン(`DEV_LOGIN_ENABLED=true`)と、ドライブの模擬(`DRIVE_MODE=mock`)に置き換える(design-spec 8章)。
 
-**理由:** 認可の漏れと同時操作の規則は、DB を通さないと確かめられない。Google のアカウントをテストに持ち込まないことで、CI で毎回回せる。
+**理由:** 認可の漏れと同時操作の規則は、DB を通さないと確かめられない。Google のアカウントをテストに持ち込まないことで、CI で毎回回せる。bun test は Bun に組み込みで、API・画面・共有コードを1つのテストランナーで回せる。Playwright は複数のタブ(資料を別タブで開く、編集画面を開く)と、トレースでの失敗の調査に強い。
 
-**トレードオフ:** 模擬と本物の Drive API の違いは、本番で確かめるまで残る。模擬は `apps/api/src/drive/` で本物と同じインターフェースを実装し、差を小さくする。
+**トレードオフ:** 模擬と本物の Drive API の違いは、本番で確かめるまで残る。模擬は `apps/api/src/drive/` で本物と同じインターフェースを実装し、差を小さくする。捨てた案: Vitest(優秀だが、Bun の組み込みと実行環境が2つになる)、Cypress(複数タブの扱いに制約がある)、本物の Google のテスト用アカウント(2段階認証や同意画面を自動化できず、CI で不安定になる)。
 
 ### ADR-018: Lint と整形は Biome
 
@@ -222,40 +228,41 @@ Google のアクセストークン(1時間有効)だけは、インスタンス�
 
 **理由:** 1つの道具・1つの設定ファイルで済み、速い。
 
-**トレードオフ:** ESLint のプラグイン(React Hooks の一部の規則など)は使えない。
+**トレードオフ:** ESLint のプラグインの規則は使えない(React Hooks の依存配列の一部の規則、typescript-eslint の型情報を使う規則(浮いた Promise の検出など))。型の問題は `tsc --noEmit`(`make typecheck`)で拾う。捨てた案: ESLint + Prettier(規則は最も豊富だが、2つの道具と設定の組み合わせを保守する手間と、実行の遅さがこの規模に見合わない)。
 
 ### ADR-019: 監視は Cloud Logging / Monitoring / Error Reporting に寄せる
 
-**決定:** ログは構造化 JSON を標準出力に出し、Cloud Logging で集める。例外は Error Reporting、稼働監視とアラートは Cloud Monitoring(アップタイムチェックとアラートポリシー)で行う。Sentry 等の外部サービスは使わない。
+**決定:** ログは構造化 JSON を標準出力に出し、Cloud Logging で集める。例外は Error Reporting、稼働監視とアラートは Cloud Monitoring(アップタイムチェックとアラートポリシー)で行う。画面で起きた想定外のエラーは、API の `POST /api/client-errors` に送り、同じ Cloud Logging に残す。Sentry 等の外部サービスは使わない。
 
-**理由:** 追加の費用とアカウントが要らず、Terraform で一緒に管理できる。
+**理由:** 追加のアカウントが要らず、Terraform で一緒に管理できる。ログとエラーの置き場所が GCP の中だけになり、資料名などが外部のサービスに出る経路を増やさない(7章「個人情報」)。
 
-**トレードオフ:** 画面(ブラウザ)の例外は集めない。画面で起きた想定外のエラーは、API の `POST /api/client-errors` に送ってログに残す(11章)。
+**トレードオフ:** 画面のエラーは、ソースマップでの復元と集約をせず、圧縮されたスタックのまま残る(調べるときは手元でビルドの成果物と照らす)。捨てた案: Sentry(無料枠があり画面のエラーの集約に強いが、外部に送る経路が増え、アカウントの管理が1つ増える)。
 
 ### ADR-020: デザイントークンから CSS 変数を生成する(変換ツールは使わない)
 
 **決定:** `docs/06_design-tokens.json` を正とし、`scripts/gen-tokens.ts`(`make tokens`)で `apps/web/src/styles/tokens.css`(CSS 変数)を生成する。Tailwind の `@theme` はこの CSS 変数を参照する。Style Dictionary 等の変換ツールは使わない。
 
-**理由:** トークンの数が少なく、DTCG 形式のエイリアスを解いて CSS 変数を書き出すだけなら、数十行のスクリプトで足りる。ダークモードは `prefers-color-scheme` のメディアクエリで切り替える(design-spec 4.4)。
+**理由:** トークンの数が少なく、DTCG 形式のエイリアスを解いて CSS 変数を書き出すだけなら、数十行のスクリプトで足りる。複合型は次のように書き出す: typography → 項目ごとの CSS 変数(`--typography-body-font-size` 等)と同名のユーティリティクラス、shadow → `box-shadow` の値1つ、transition → 時間とイージングの変数。`$extensions.com.weaponx.fontVariantNumeric` はユーティリティクラスの `font-variant-numeric` にする。ダークモードは `prefers-color-scheme` のメディアクエリで切り替える(design-spec 4.4)。
 
 **トレードオフ:** 生成物(`tokens.css`)をリポジトリに入れるので、JSON だけを直して生成を忘れると食い違う。CI で「生成し直して差分が無いこと」を確かめる。
 
 ### ADR-021: ローカル開発は Docker Compose に閉じる
 
-**決定:** ローカルの DB・API・画面・E2E・Lint・マイグレーションは、すべて Docker Compose(`compose.yaml`)の中で動かす。手元に要るのは Docker・make・git だけ。`make` の各ターゲットは `docker compose run` / `exec` を呼ぶ薄いラッパーにする。初回のクラウド設定に使う Terraform と gcloud も、`ops` のコンテナで動かす。VS Code 用に Dev Container の設定(`.devcontainer/`)を置く。
+**決定:** ローカルの DB・API・画面・E2E・Lint・マイグレーションは、すべて Docker Compose(`compose.yaml`)の中で動かす。手元に要るのは Docker・make・git だけ。`make` の各ターゲットは `docker compose run` / `exec` を呼ぶ薄いラッパーにする。初回のクラウド設定に使う Terraform と gcloud も、`ops` のコンテナで動かす。VS Code 用に Dev Container の設定(`.devcontainer/`、`tools` のコンテナにつなぐ)を置く。
 
-| サービス | イメージ | 役割 |
-|---------|---------|------|
-| `db` | `postgres:16` | 開発用 DB(`weaponx`)とテスト用 DB(`weaponx_test`) |
-| `api` | `docker/dev.Dockerfile`(`oven/bun` ベース) | `bun --watch` で API を起動(:3000) |
-| `web` | 同上 | Vite の開発サーバー(:5173)。`/api` を `api:3000` へ転送 |
-| `tools` | 同上 | `bun install`・テスト・Lint・drizzle-kit などの単発コマンド。Dev Container もここにつなぐ |
-| `e2e` | `mcr.microsoft.com/playwright`(Node.js 入り) | Playwright。`e2e` プロファイルのときだけ起動 |
-| `ops` | `docker/ops.Dockerfile`(`google/cloud-sdk` + Terraform + openssl) | Terraform・gcloud・秘密の値の生成(openssl)。`ops` プロファイルのときだけ起動。gcloud の認証情報は名前付きボリュームに保存 |
+サービスの構成(`db`・`api`・`web`・`tools`・`e2e`・`ops`)は `docs/03_dev-setup.md` 1章。
 
-**理由:** 利用者の希望。Bun・Node.js・Terraform の版を手元でそろえる手間が無くなり、CI(GitHub Actions)も同じ `make` のターゲットで同じコンテナを使うので、手元と CI の差が出ない。
+**理由:** 利用者の希望。Bun・Node.js・Terraform の版を手元でそろえる手間が無くなり、CI(GitHub Actions)も同じ `make` のターゲットで同じコンテナを使うので、手元と CI の差が出ない。`node_modules` はコンテナ(Linux)用に入るので、エディタの型チェックと Biome はコンテナの中で動かすのが確実で、Dev Container でそれを1クリックにする。
 
-**トレードオフ:** Mac ではファイルの変更検知と `bun install` が手元より遅い。リポジトリはバインドマウントで、`node_modules` も手元のディレクトリに Linux 用として入る(エディタは型定義を読める。手元で `bun install` を実行すると壊れるので、実行しない)。
+**トレードオフ:** Mac ではファイルの変更検知と `bun install` が手元より遅い。リポジトリはバインドマウントで、`node_modules` も手元のディレクトリに Linux 用として入る(手元で `bun install` を実行すると壊れるので、実行しない)。Dev Container は VS Code(と対応するエディタ)でしか使えない。捨てた案: DB だけを Compose に置き、Bun と Node.js は手元に入れる(変更の反映は速いが、手元と CI で版がずれ、利用者の希望にも合わない)、mise 等で手元の版をそろえる(同上。手元の OS の差は残る)。
+
+### ADR-022: CI/CD は GitHub Actions + Workload Identity 連携、リリースは `deploy/production/version` で行う
+
+**決定:** CI/CD は GitHub Actions で行い、GCP への認証はサービスアカウントの鍵を使わず Workload Identity 連携で行う。main へのマージでアーティファクト(API のイメージと画面の静的ファイル)をビルドし、本番へのリリースは `deploy/production/version` を更新する promotion PR のマージをきっかけにする(`docs/03_dev-setup.md` 9章、`docs/04_deployment-procedure.md` 2章)。インフラの変更は `infra.yml` が PR で plan、main へのマージで apply する(手元の `ops` のコンテナで apply するのは初回だけ)。
+
+**理由:** リポジトリが GitHub にあり、CI でも `make` のターゲットと Docker Compose をそのまま使える(ADR-021)。鍵ファイルを GitHub に置かないで済む。マージとリリースを分けるので、main に入れた変更を好きなときに本番に出せ、ファイルを1つ前の値に戻す(promotion PR を revert する)だけでロールバックできる。本番で動いているバージョンが常にリポジトリに記録される。
+
+**トレードオフ:** リリースのたびに promotion PR を1つ作る手間がかかる。捨てた案: Cloud Build(GCP の中で完結するが、PR へのコメントやブランチ保護との連携を自分で組む必要がある)、main へのマージで自動デプロイ(手数は最少だが、ステージングが無い構成ではマージのたびに本番が変わり、出すタイミングを選べない)、git タグでのリリース(本番で動いているバージョンがファイルに残らず、ロールバックもタグの付け直しになる)。
 
 ---
 
@@ -270,8 +277,8 @@ Google のアクセストークン(1時間有効)だけは、インスタンス�
 | `/projects/:projectId` | 案件 U2(3.2、6.1)。選んだ系列と版は `?series={seriesId}&doc={documentId}` |
 | `/projects/:projectId/members` | メンバー管理 U3(3.2、6.5.2) |
 | `/admin/users` | 利用者管理 A1(3.3、6.5.4) |
-| 上記以外 | エラー「ページが見つかりません」(3.1、6.5.7) |
-| (ルートなし) | エラー「問題が発生しました」は、画面全体を表示できないときにエラー境界で出す(6.5.7) |
+| 上記以外 | エラー(存在しない URL。3.1、6.5.7) |
+| (ルートなし) | エラー(想定外の障害。3.1、6.5.7)は、画面全体を表示できないときにエラー境界で出す |
 
 - ダイアログ(design-spec 3.4)はルートを持たない
 - 認証の要る画面を未ログインで開いたら、`/login?returnTo={元のパスと検索パラメーター}` へ送る(design-spec 6.0.7)。`returnTo` は `/` で始まり `//` で始まらないパスだけを受け付ける(オープンリダイレクト対策)
@@ -284,11 +291,12 @@ Google のアクセストークン(1時間有効)だけは、インスタンス�
 ### 5.1 共通の約束
 
 - ベースパスは `/api`。リクエストとレスポンスの本文は JSON(UTF-8)。日時は ISO 8601(UTC、`Z` 付き)。ID は UUID
-- 認証: Cookie `wx_session`(HttpOnly、Secure、SameSite=Lax、Path=/)。5.2・5.9 の一部を除き、すべてのエンドポイントでセッションが要る
+- 認証: Cookie `wx_session`(HttpOnly、Secure、SameSite=Lax、Path=/)。5.2(`reconnect` と `logout` を除く)、5.3 の `GET /api/config`、5.10 の一部を除き、すべてのエンドポイントでセッションが要る
 - 状態を変えるメソッド(POST・PATCH・PUT・DELETE)は、`Origin` ヘッダーが `APP_ORIGIN` と一致しなければ 403 `CSRF_REJECTED`(7章)
-- すべてのレスポンスに `X-Request-Id` を付ける(8章)
+- すべてのレスポンスに `X-Request-Id` を付ける(8章)。ただし Cloud Armor が返す 429 は LB が応答するので付かない
 - 一覧はページ分けしない(design-spec 1.2)。検索と候補だけ件数の上限を持つ
-- エラーの形式とコードは8章。入力の上限・正規化は `packages/shared` の定数を API と画面で共有する(design-spec 6.0.3)
+- エラーの形式とコードは8章。入力の上限(値は design-spec 6.0.3)と正規化は `packages/shared` の定数・関数にし、API と画面で共有する
+- 「ドライブの資料」は、URL からドライブのファイル ID を取り出せる資料(`docs.google.com/{document,presentation,spreadsheets}/d/{id}`、`drive.google.com/file/d/{id}`。ドライブ上の PDF 等を含む)。資料名と更新日時の自動取得・重複の判定(`link_key`)・メタデータの取り直しの対象になる(design-spec 6.0.4・6.1・6.2)
 - 以下の型の記法は TypeScript。`?` は省略可、`| null` は値が無いことがある
 
 共通の型:
@@ -311,11 +319,11 @@ type Version = {
   kind: DocumentKind;
   url: string;
   googleFileId: string | null;
-  updatedAt: IsoDateTime;                // 版の更新日時(6章「導出する値」)
+  modifiedAt: IsoDateTime;               // 版の更新日時(6章「導出する値」)。行の updated_at とは別
   sourceModifiedAt: IsoDateTime | null;
   nameLocked: boolean;                   // metadata_fetched_at に値がある(design-spec 6.5.6)
   changeNote: string | null;
-  tags: string[];                        // label。付けた順
+  tags: string[];                        // label。付けた順(position の小さい順)
   registeredBy: UserRef;
   createdAt: IsoDateTime;
 };
@@ -326,7 +334,7 @@ type SeriesRow = {
   id: Uuid;
   latest: Version;
   olderCount: number;                    // 旧版の件数
-  tags: TagBadge[];                      // 表示順に並べた全件(画面が2件 + 「+n」に畳む)
+  tags: TagBadge[];                      // 6章「導出する値」の順に並べた全件。何件出すかは画面が決める(design-spec 6.1)
   searchNames: string[];                 // 削除されていない版の名前(絞り込み用)
 };
 
@@ -443,12 +451,12 @@ type ProjectRow = {
 
 **`GET /api/projects/:projectId/series`** → 200 `{ "series": SeriesRow[] }`
 
-- 削除されていない版を1件以上持つ系列だけ。最新版の `updatedAt` の新しい順(画面は並べ替え・絞り込みを手元で行う。design-spec 6.1)
+- 削除されていない版を1件以上持つ系列だけ。最新版の `modifiedAt` の新しい順(画面は並べ替え・絞り込みを手元で行う。design-spec 6.1)
 
 **`POST /api/projects/:projectId/metadata-refresh`** → 200 `{ "updatedSeriesIds": ["..."] }`
 
-- design-spec 6.1「メタデータの取り直し」。表の最新版のうち Google の資料で、呼んだ人のアプリが使えるものだけを Drive から取り直す。10分以内に取得済みの版は飛ばす。同時に5件まで並べて呼ぶ。1回で最大300件
-- 要再連携なら 409 `DRIVE_REAUTH_REQUIRED`(画面は通知を出さず、状態だけ切り替える)
+- design-spec 6.1「メタデータの取り直し」。表の最新版のうちドライブの資料(5.1)で、呼んだ人のアプリが使えるものだけを Drive から取り直す。10分以内に取得済みの版は飛ばす。同時に5件まで並べて呼ぶ。1回で最大300件
+- 要再連携なら 409 `DRIVE_REAUTH_REQUIRED`(画面の扱いは design-spec 6.1「状態ごとの表示」)
 
 **`GET /api/series/:seriesId?documentId={uuid}`** → 200(横パネル)
 
@@ -463,8 +471,8 @@ type ProjectRow = {
 ```
 
 - `documentId` を省くと最新版。指定した版が削除済み・別の系列なら 404 `DOCUMENT_NOT_FOUND`
-- `references`・`referencedBy` は、同じ案件 → 他の案件 → `no_access` → `deleted` の区分の順で返す。区分の中の名前順は画面が表示言語の辞書順で並べる(design-spec 1.2)
-- `referencedBy` に削除済みの案件の系列は入れない(design-spec 6.1)
+- `references`・`referencedBy` は design-spec 6.1 の並び順の区分(同じ案件・他の案件・`no_access`・`deleted`)の順で返す。区分の中の名前順は、画面が表示言語の辞書順で並べる(design-spec 1.2)
+- `referencedBy` に入る系列は6章「導出する値」の「この資料を参考にした資料」
 
 **`POST /api/projects/:projectId/documents`**(編集者以上。リンクで登録)
 
@@ -478,10 +486,12 @@ type ProjectRow = {
 }
 ```
 
-→ 201 `{ "series": SeriesRow, "document": Version }`
+→ 201 `{ "series": SeriesRow, "document": Version, "driveStatus": "active" }`
 
-- Google の資料で、登録する人のアプリが使えるなら、サーバーが Drive から資料名と更新日時を取り直して上書きし、`metadata_fetched_at` を入れる(送られた `name` より Drive の値を正とする)。使えなければ送られた値で登録する
-- `sourceModifiedAt` は日付ピッカーの値(ブラウザのタイムゾーンの0時)を UTC にしたもの。`null` なら登録日時を使う
+- ドライブの資料で、登録する人が要再連携でなければ、サーバーが Drive から資料名・更新日時・種類を取り直して上書きし、`metadata_fetched_at` を入れる(送られた値より Drive の値を正とする。ドライブ上の PDF は Drive の種類で `pdf` にする)
+- 取り直せなかったとき(要再連携、アプリがまだ使えない、Drive の一時的な失敗)は、送られた値で登録を成功させる(design-spec 6.2「リンクでの登録はそのまま続けられる」)。取り直しで認可エラーになったら、登録は成功させたうえで連携の状態を要再連携に切り替える
+- 応答にはいつも `"driveStatus": "active" | "needs_reauth"` を付ける。画面はこれで連携の状態を更新する(`POST .../versions`、`PATCH /api/documents/:id` でリンクを変えたときも同じ)
+- `sourceModifiedAt` は日付ピッカーの値(ブラウザのタイムゾーンの0時)を UTC にしたもの。`null` のときの表示は6章「導出する値」の「版の更新日時」
 
 **`POST /api/projects/:projectId/documents/new`**(編集者以上。新しく作る)
 
@@ -492,6 +502,7 @@ type ProjectRow = {
 → 201 `{ "series": SeriesRow, "document": Version, "editUrl": "https://docs.google.com/document/d/.../edit" }`
 
 - design-spec 6.0.8 の順(アプリの確認 → Drive で作成 → 登録)。`kind` は `google_doc` か `google_slides` だけ
+- 作成・コピーした版は、Drive の応答の資料名と更新日時で登録し、`metadata_fetched_at` を入れる(資料名は読み取り専用になる。design-spec 6.5.6)。3つの作成系のエンドポイントで共通
 
 **`POST /api/series/:seriesId/versions`**(編集者以上。新しい版を登録)
 
@@ -506,7 +517,7 @@ type ProjectRow = {
 }
 ```
 
-→ 201 `{ "series": SeriesRow, "document": Version }`
+→ 201 `{ "series": SeriesRow, "document": Version, "driveStatus": "active" }`
 
 - `referenceIds` は、画面が最新版の参考資料を初期値として入れた後の最終形。新しく足したものだけを検証する(design-spec 6.0.3)
 
@@ -518,7 +529,7 @@ type ProjectRow = {
 
 → 201 `{ "series": SeriesRow, "document": Version, "editUrl": "..." }`
 
-- 参考資料は、処理した時点の最新版の参考資料を引き継ぐ。タグは引き継がない(design-spec 6.3)。版番号は処理した時点の次の番号(design-spec 6.0.6)
+- 参考資料・タグの扱いと版番号は design-spec 6.3・6.0.6 のとおり(参考資料は処理した時点の系列の最新版から引き継ぐ)
 
 **`POST /api/documents/:documentId/copies`**(コピー元の案件で編集者以上、かつ追加先で編集者以上。これを元に作る)
 
@@ -544,10 +555,10 @@ type ProjectRow = {
 }
 ```
 
-→ 200 `{ "series": SeriesRow, "document": Version }`
+→ 200 `{ "series": SeriesRow, "document": Version, "driveStatus": "active" }`
 
-- 送った項目だけを変える。`tags` と `referenceIds` は一式で置き換える(最終形を送る)。タグは差分で足し引きし、残るタグの付けた日時は変えない
-- `nameLocked` の版で `name`・`sourceModifiedAt` を送ったら 422 `VALIDATION_FAILED`(`url` を変えた場合を除く。design-spec 6.5.6)。`url` を変えたら `metadata_fetched_at` を空にし、アプリが使える Google の資料なら取り直して入れる
+- 送った項目だけを変える。`tags` と `referenceIds` は最終形の一式を送る(design-spec 6.0.6)。DB への書き方は6章 document_tags の規則
+- `nameLocked` の版で `name`・`sourceModifiedAt` を送ったら 422 `VALIDATION_FAILED`(`url` を変えた場合を除く。design-spec 6.5.6)。`url` を変えたら `metadata_fetched_at` を空にし、ドライブの資料(5.1)で取り直せたら入れる(取り直せないときの扱いは `POST /api/projects/:projectId/documents` と同じ)
 - 削除済みの版は 404 `DOCUMENT_NOT_FOUND`
 
 **`DELETE /api/documents/:documentId`**(編集者以上)→ 200
@@ -566,13 +577,13 @@ type ProjectRow = {
 {
   "results": [
     { "documentId": "...", "seriesId": "...", "projectId": "...", "projectName": "A社 DX提案",
-      "name": "提案書 v2", "kind": "google_slides", "url": "https://...", "updatedAt": "2026-09-21T02:00:00Z", "isLatest": false }
+      "name": "提案書 v2", "kind": "google_slides", "url": "https://...", "modifiedAt": "2026-09-21T02:00:00Z", "isLatest": false }
   ],
   "truncated": false
 }
 ```
 
-- `q` は1〜100文字。最大50件、51件目があれば `truncated: true`。更新日時の新しい順
+- `q` の上限は design-spec 6.0.3、件数の上限は design-spec 6.4。上限を超える結果があれば `truncated: true`。更新日時の新しい順
 
 **`GET /api/reference-candidates?q={語}&excludeSeriesId={uuid}`** → 200(参考資料の候補。design-spec 6.2・6.5.5・6.5.6)
 
@@ -580,9 +591,9 @@ type ProjectRow = {
 { "candidates": [ { "documentId": "...", "seriesId": "...", "projectId": "...", "projectName": "B社 市場調査", "name": "競合比較", "kind": "google_sheets" } ] }
 ```
 
-- 参加している、削除されていない案件の系列の最新版。`excludeSeriesId` の系列を除く。最大20件
+- 参加している、削除されていない案件の系列の最新版。`excludeSeriesId` の系列を除く。件数の上限は design-spec 6.0.3(候補)
 
-**`GET /api/projects/:projectId/tags?q={語}`** → 200 `{ "tags": ["提出", "確定"] }`(タグの候補。6章の規則。最大20件)
+**`GET /api/projects/:projectId/tags?q={語}`** → 200 `{ "tags": ["提出", "確定"] }`(タグの候補。6章の規則。件数の上限は design-spec 6.0.3)
 
 ### 5.7 ドライブ
 
@@ -593,11 +604,11 @@ type ProjectRow = {
 ```
 
 - 資料名・更新日時の自動取得と、ファイル選択画面で選んだ後の取得に使う(design-spec 6.2・6.0.9)
-- アプリがまだ使えない・見る権限が無い → 422 `DRIVE_FILE_NOT_ACCESSIBLE`(`details.fileId`)。Google の資料の URL でない → 422 `VALIDATION_FAILED`。要再連携 → 409 `DRIVE_REAUTH_REQUIRED`
+- アプリがまだ使えない・見る権限が無い → 422 `DRIVE_FILE_NOT_ACCESSIBLE`(`details.fileId`)。drive.file の範囲では2つを見分けられないので、画面は常に design-spec 6.0.9 の案内を出す。ドライブの資料(5.1)の URL でない → 422 `VALIDATION_FAILED`。要再連携 → 409 `DRIVE_REAUTH_REQUIRED`
 
 **`GET /api/documents/:documentId/drive-access`** → 200 `{ "accessible": true, "fileId": "1AbC..." }`
 
-- 作成ダイアログを開いた時点の確認(design-spec 6.3)。Google の資料でない版は 422 `VALIDATION_FAILED`
+- 作成ダイアログを開いた時点の確認(design-spec 6.3)。ドキュメント・スライドでない版は 422 `VALIDATION_FAILED`
 
 **`POST /api/drive/picker-token`** → 200 `{ "accessToken": "ya29...", "expiresAt": "2026-09-30T04:10:00Z" }`
 
@@ -618,7 +629,7 @@ type ProjectRow = {
 
 **`GET /api/projects/:projectId/member-candidates?q={語}`**(オーナー)→ 200 `{ "users": [ { "id": "...", "email": "...", "displayName": "..." } ] }`
 
-- 有効な利用者のうち、まだメンバーでない人。名前かメールの部分一致。最大20件
+- 有効な利用者のうち、まだメンバーでない人。名前かメールの部分一致。件数の上限は design-spec 6.0.3(候補)
 
 **`POST /api/projects/:projectId/members`**(オーナー)本文 `{ "userId": "<uuid>", "role": "editor" }` → 201 `{ "member": ...GET の1件 }`
 
@@ -645,7 +656,7 @@ type ProjectRow = {
 
 **`PATCH /api/admin/users/:userId`** 本文 `{ "status": "suspended" }` または `{ "globalRole": "admin" }` → 200 `{ "user": ... }`
 
-- 自分自身は 422 `SELF_CHANGE_FORBIDDEN`。最後の有効な管理者を外す・停止する → 409 `LAST_ADMIN`。停止すると、その人のセッションをすべて消す
+- 自分自身は 422 `SELF_CHANGE_FORBIDDEN`。最後の有効な管理者を外す・停止する → 409 `LAST_ADMIN`。停止してもセッションは消さない。停止された人の次のリクエストで 401 `ACCOUNT_SUSPENDED` を返し、そのときにセッションを消す(7章)
 
 **`GET /api/admin/users/:userId/sole-owner-count`** → 200 `{ "count": 1 }`(停止の確認ダイアログ。design-spec 6.5.4)
 
@@ -653,13 +664,20 @@ type ProjectRow = {
 
 | メソッド・パス | 認証 | 内容 |
 |---------------|------|------|
-| `GET /api/healthz` | 不要 | 200 `{ "status": "ok", "version": "..." }`。DB を見ない(LB とアップタイムチェック用) |
+| `GET /api/healthz` | 不要 | 200 `{ "status": "ok", "version": "..." }`。DB を見ない(Cloud Run の起動プローブとアップタイムチェック用。サーバーレス NEG には LB のヘルスチェックを付けられない) |
 | `GET /api/readyz` | 不要 | DB に `SELECT 1` して 200 / 503 |
-| `POST /api/client-errors` | 要 | 画面の想定外のエラーを送る。本文 `{ "message": string, "stack"?: string, "path": string }`。204 |
-| `GET /api/dev/users` | 不要 | 開発用ログインの利用者一覧。`DEV_LOGIN_ENABLED=true` のときだけルートを登録する |
-| `POST /api/dev/login` | 不要 | 本文 `{ "email": "yamada@example.com" }` → 204。セッションを作る。`drive_connections` は更新しない(design-spec 8章)。同上 |
+| `POST /api/client-errors` | 不要 | 画面の想定外のエラーを送る(ログイン画面・エラー画面からも送れるように認証を求めない。セッションがあれば利用者 ID を記録する)。本文 `{ "message": string, "stack"?: string, "path": string }`。204。記録するときは `path` から検索パラメーターを落とし、`message` は500文字、`stack` は4000文字で切る(7章「ログ」) |
+| `GET /api/dev/users` | 不要 | 開発用ログインの利用者一覧。一度でもログインした(Google アカウントの ID がある)利用者だけを返す(未ログインの利用者は、ドライブ連携の記録が無いので選べない)。`DEV_LOGIN_ENABLED=true` のときだけルートを登録する |
+| `POST /api/dev/login` | 不要 | 本文 `{ "email": "yamada@example.com" }` → 204。セッションを作る。`drive_connections` は更新しない(design-spec 8章)。停止中の利用者は本物のログインと同じく `wx_login_notice`(`suspended`)を入れて 401。同上 |
+| `POST /api/dev/drive/grant` | 要 | 本文 `{ "fileId": "..." }` → 204。ドライブの模擬で、そのファイルを呼んだ利用者の「アプリが使えるファイル」にする(模擬のファイル選択画面で選んだときに画面が呼ぶ。design-spec 8章)。`DRIVE_MODE=mock` のときだけルートを登録する |
 
-`NODE_ENV=production` で `DEV_LOGIN_ENABLED=true` なら、API は起動しない(誤って本番で開発用ログインを開けないため)。
+`NODE_ENV=production` で `DEV_LOGIN_ENABLED=true` または `DRIVE_MODE=mock` なら、API は起動しない(誤って本番で開発用ログインや模擬を開けないため)。
+
+ドライブの模擬(`DRIVE_MODE=mock`)の振る舞い(design-spec 8章):
+
+- 「アプリが使えるファイル」は、利用者ごとの集合を API のメモリに持つ(開発・E2E 専用。1台で動かす)。起動時は、各利用者が登録した版のファイル ID で埋める
+- 画面は `/api/config` の `picker` が `null` のとき、Google Picker の代わりに模擬のファイル選択画面(シードのドライブの資料の一覧)を出し、選んだら `POST /api/dev/drive/grant` を呼ぶ
+- `GET /api/auth/google/reconnect` は、Google へ行かずに `drive_connections.status` を `active` にし、`wx_drive_notice`(`reconnected`)を入れて `returnTo` へ戻す
 
 ---
 
@@ -687,13 +705,13 @@ erDiagram
 - `drive_connections` はログインした利用者には必ず1件ある。0件なのは、管理者が追加してまだログインしていない利用者だけ(開発用ログインで入った利用者はシードの値を使う)
 - 「監査用」のカラム(`created_by`・`deleted_by`・`added_by`・`created_via` 等)は MVP の画面では使わない。design-spec 9章の操作の記録のために持つ
 
-### 論理設計(design-spec の Phase 2 版)からの差分
+### 論理設計(Phase 2 時点の design-spec 7章。git の履歴)からの差分
 
 | 差分 | 理由 |
 |------|------|
 | `sessions` を追加 | DB セッション(ADR-010) |
 | `documents.project_id` を追加(系列の案件の写し。変わらない) | リンクの重複を部分一意インデックスで守るため(ADR-013) |
-| `documents.link_key` を追加 | 重複の比べ方(design-spec 6.0.4)を1つの値にする。Google の資料は `g:{google_file_id}`、それ以外は `u:{前後の空白を除いた URL}` |
+| `documents.link_key` を追加 | 重複の比べ方(design-spec 6.0.4)を1つの値にする。ドライブの資料(5.1)は `g:{google_file_id}`、それ以外は `u:{前後の空白を除いた URL}` |
 | `documents.name_key` を追加 | 検索と絞り込みの正規化(NFKC + 小文字)。design-spec 6.1・6.4「大文字・小文字、全角・半角の英数字は区別しない」 |
 | `drive_connections.credentials` の中身を決定 | リフレッシュトークンだけを AES-256-GCM で暗号化(ADR-012) |
 
@@ -849,9 +867,9 @@ export const documents = pgTable(
     name: text("name").notNull(),
     nameKey: text("name_key").notNull(), // NFKC + 小文字
     url: text("url").notNull(),
-    linkKey: text("link_key").notNull(), // "g:{google_file_id}" | "u:{url}"
+    linkKey: text("link_key").notNull(), // "g:{google_file_id}"(ドライブの資料)| "u:{url}"
     kind: documentKind("kind").notNull(),
-    googleFileId: text("google_file_id"),
+    googleFileId: text("google_file_id"), // ドライブの資料(5.1)のファイル ID
     sourceModifiedAt: tz("source_modified_at"),
     metadataFetchedAt: tz("metadata_fetched_at"),
     changeNote: text("change_note"),
@@ -904,6 +922,7 @@ export const documentTags = pgTable(
       .references(() => documents.id),
     labelKey: text("label_key").notNull(), // NFKC + 小文字
     label: text("label").notNull(), // 入力されたとおり
+    position: integer("position").notNull(), // 付けた順。版の中で増えていく(消しても詰めない)
     createdBy: uuid("created_by")
       .notNull()
       .references(() => users.id), // 監査用
@@ -913,38 +932,38 @@ export const documentTags = pgTable(
 );
 ```
 
-- `documents_name_key_trgm_idx` の前に拡張が要る。最初のマイグレーションを `drizzle-kit generate --custom` で作り、`CREATE EXTENSION IF NOT EXISTS pg_trgm;` を書く
+- `documents_name_key_trgm_idx` の前に拡張が要る。最初のマイグレーションを手書き(`make db-generate CUSTOM=1`)で作り、`CREATE EXTENSION IF NOT EXISTS pg_trgm;` を書く
 - 文字数の上限(design-spec 6.0.3、見た目の1文字 = 書記素で数える)は API で検証する。DB には長さの制約を置かない
 
 ### テーブルごとの規則
 
-design-spec の論理設計から引き継いだ規則。API はこれを守る(守り方は ADR-013)。
+規則の意味(何を守るか)は design-spec が持つ。ここは、それをどのテーブル・カラムで守るかと、DB 固有の規則を持つ。同時操作での守り方は ADR-013。
 
 - users
-  - `global_role = admin` かつ `status = active` の利用者が常に1人以上いる(design-spec 6.0.6)
+  - 有効な管理者が常に1人以上(design-spec 2.1): `global_role = admin` かつ `status = active` の行を数える
 - drive_connections
-  - 初回ログインで作り、以降のログインと再連携で認可情報と状態を更新する。アプリに連携の解除は無いので、行を消すことは無い
-  - 再連携した Google アカウントは `users.google_subject` と一致することを確認する(一致しなければ保存しない)
+  - 初回ログインで作り、以降のログインと再連携で `credentials`・`status`・`granted_scopes`・`connected_at` を更新する。アプリに連携の解除は無いので、行を消すことは無い
+  - 再連携したアカウントの `sub` が `users.google_subject` と違えば保存しない(design-spec 6.0.5)
 - sessions
-  - 期限は最後の操作から14日。残り7日を切ったリクエストで延長する。利用者の停止・ログアウトで行を消す。期限切れの行はログインのたびにまとめて消す
+  - 期限と延長は ADR-010。利用者の停止・ログアウトで行を消す。期限切れの行はログインのたびにまとめて消す
 - projects
   - `last_activity_at` を更新する場面: 案件の作成、案件名の変更、版の登録・作成、登録内容の編集、版の削除、メタデータの取り直しで版の更新日時が新しくなったとき。値はその操作の日時(取り直しの場合は新しい更新日時と今の値の新しいほう)
-  - 削除されていない案件には `role = owner` のメンバーが常に1人以上いる(design-spec 6.0.6)
+  - 削除されていない案件のオーナーが1人以上(design-spec 2.1): `role = owner` の `project_members` を数える
 - project_members
-  - メンバーから外したら行を消す。案件を削除しても行は残す(元メンバーの判定に使う。design-spec 6.1 関連資料の表示規則)
+  - メンバーから外したら行を消す。案件を削除しても行は残す(元メンバーの判定に使う。「導出する値」の関連資料の表示区分)
 - document_series
   - 削除されていない版が0件の系列は、一覧・検索・資料数・参考にした資料に含めない
 - documents
-  - 削除されていない版が1つも無い系列への新しい版の登録と、削除済みの版の登録内容の編集は受け付けない(`DOCUMENT_NOT_FOUND`)。削除済みの版を参考資料として新しく選ぶことも受け付けない(`REFERENCE_UNAVAILABLE`)。すでに記録されている参考資料と引き継いだ参考資料は検証しない(design-spec 6.0.3)
-  - `metadata_fetched_at` に値がある版は、資料名と更新日時を API から直せない(リンクを変えた場合を除く。design-spec 6.5.6)
+  - 削除済みの版の編集、削除されていない版が無い系列への版の追加は `DOCUMENT_NOT_FOUND`。新しく選んだ参考資料の検証は design-spec 6.0.3(違反は `REFERENCE_UNAVAILABLE`)
+  - `metadata_fetched_at` に値がある版の資料名と更新日時の変更は 5.5 の `PATCH` の規則に従う
 - document_references
-  - 同じ系列の版どうしは参考資料にできない。1つの版の参考資料は20件まで
-  - 参考資料の版やその案件が削除済みになっても行は残し、表示で「削除された資料」とする(design-spec 6.1 関連資料の表示規則)
+  - 同じ系列の版どうしは参考資料にできない(design-spec 6.5.5・6.5.6)。件数の上限は design-spec 6.0.3
+  - 参考資料の版やその案件が削除済みになっても行は残し、`RelatedItem` の `deleted` として返す
 - document_tags
-  - 1つの版のタグは5件まで。同じタグを同じ系列の複数の版に付けてもよい
+  - 件数の上限と重複の判定は design-spec 6.0.3(`label_key` が同じなら重複)
+  - 保存は、送られた一式と今の行を比べ、無くなったタグの行を消し、増えたタグの行を足す。足す行の `position` は、その版の今の最大値 + 1 から、送られた一式の順に振る。残るタグの行は触らない(付けた順を保つ)
   - 版が削除済みになっても行は残す(表示には出さない)
-  - タグの候補は、同じ案件の削除されていない版に付いているタグから作る
-  - 同じ `label_key` で表記が違うタグ(Final と final など)が複数の版にあるときは、表のバッジと候補では、`label_key` ごとに最も新しく付けた行の `label` で出す。版ごとの表示(横パネルの版の欄)は、その版に付けた `label` のまま出す
+  - 同じ `label_key` で表記が違うタグ(Final と final など)が複数の版にあるときは、表のバッジ(`SeriesRow.tags`)とタグの候補では、`label_key` ごとに最も新しく付けた行の `label` を返す。版ごとの表示(`Version.tags`)は、その版に付けた `label` のまま返す
 
 ### 導出する値
 
@@ -956,8 +975,8 @@ design-spec の論理設計から引き継いだ規則。API はこれを守る(
 | 案件の資料数 | 削除されていない版を1件以上持つ系列の数 |
 | 案件の最終更新 | `projects.last_activity_at` |
 | 参考資料(ある版の) | `document_references` で `document_id` がその版である行の `referenced_document_id` |
-| この資料を参考にした資料(ある系列の) | `referenced_document_id` がこの系列の削除されていない版で、`document_id` が削除されていない版(その案件も削除されていない)である行を集め、`document_id` の系列ごとに1行にまとめる。行の名前はその系列の最新版の名前。添える版番号は、その系列が参考にしたこの系列の版のうち最大の `version_no`(この系列の削除されていない版が1つだけなら添えない) |
-| 表の行のタグ(ある系列の) | 系列の削除されていない版に付いたタグを `label_key` ごとにまとめ、そのタグが付いた版のうち最大の `version_no` を求める。それが最新版なら `label` だけ、そうでなければ「`label` v{version_no}」と表示する。求めた `version_no` の大きい順(同じ版の中は付けた順 = `created_at` の古い順)に並べ、2つまで出して残りは「+n」 |
+| この資料を参考にした資料(ある系列の) | 相手の系列の最新版が参考資料を持たず旧版だけが持つ場合も含める。`referenced_document_id` がこの系列の削除されていない版で、`document_id` が削除されていない版(その案件も削除されていない)である行を集め、`document_id` の系列ごとに1行にまとめる。行の名前はその系列の最新版の名前。添える版番号は、その系列が参考にしたこの系列の版のうち最大の `version_no`(この系列の削除されていない版が1つだけなら添えない) |
+| 表の行のタグ(`SeriesRow.tags`) | 系列の削除されていない版に付いたタグを `label_key` ごとにまとめ、そのタグが付いた版のうち最大の `version_no` を求める。それが最新版なら `versionNo: null`、そうでなければその `version_no`。並び順は、求めた `version_no` の大きい順(同じ版の中は付けた順 = `position` の小さい順)。何件出すか・表記は design-spec 6.1 |
 | 唯一のオーナーの案件数 | その人が owner で、他に owner がいない、削除されていない案件の数 |
 | 関連資料の表示区分(RelatedItem.visibility) | 相手の版の案件に `project_members` の行が無い → `no_access`。ある場合、相手の版か案件が削除済み → `deleted`。それ以外 → `visible`(design-spec 6.1 関連資料の表示規則の1〜4) |
 
@@ -994,12 +1013,12 @@ design-spec の論理設計から引き継いだ規則。API はこれを守る(
 | 招待・役割の変更・外す・招待の候補 | `POST/PATCH/DELETE .../members*`、`GET .../member-candidates` | ✕ | ✕(404) | ✕(403) | ✕(403) | ○ | 役割に従う |
 | 利用者の一覧・追加・停止・再開・管理者の付与と解除 | `/api/admin/users*` | ✕ | ✕(403) | ✕(403) | ✕(403) | ✕(403) | ○(自分自身の変更は ✕) |
 | 唯一のオーナーの案件数 | `GET /api/admin/users/:id/sole-owner-count` | ✕ | ✕(403) | ✕(403) | ✕(403) | ✕(403) | ○(件数だけ。案件名は返さない) |
-| 画面のエラーの送信 | `POST /api/client-errors` | ✕ | ○ | ○ | ○ | ○ | ○ |
+| 画面のエラーの送信 | `POST /api/client-errors` | ○(Cloud Armor のレート制限の対象) | ○ | ○ | ○ | ○ | ○ |
 | 開発用ログイン | `/api/dev/*` | 開発時だけ ○(本番はルート自体が無い) | — | — | — | — | — |
 
-- ✕(未認証)は 401 `UNAUTHENTICATED`。停止中の利用者はすべて 401 `ACCOUNT_SUSPENDED`(セッションも消す)
+- ✕(未認証)は 401 `UNAUTHENTICATED`。停止中の利用者のセッションで来たリクエストは、どれも 401 `ACCOUNT_SUSPENDED` を返し、そのセッションを消し、Cookie `wx_login_notice` に `{ "code": "suspended" }` を入れる(ログイン画面が停止の表示を出す。design-spec 6.0.2)
 - 不参加・削除済みの案件は 404 `PROJECT_NOT_FOUND`(403 にしない。案件があるかどうかを漏らさない。design-spec 6.0.2「理由は区別しない」)
-- 系列・版の ID で呼ぶエンドポイントは、その系列の案件で上の表を当てる。版が別の案件に属していても、その案件に参加していなければ 404 `DOCUMENT_NOT_FOUND`
+- 系列・版の ID で呼ぶエンドポイントは、その系列の案件で上の表を当てる。判定の順: 系列・版が存在しない → 404 `DOCUMENT_NOT_FOUND`。存在するがその案件に参加していない・案件が削除済み → 404 `PROJECT_NOT_FOUND`。参加しているが系列・版が削除済み → 404 `DOCUMENT_NOT_FOUND`。役割が足りない → 403 `ROLE_INSUFFICIENT`
 - 参考資料・参考にした資料(`RelatedItem`)で `no_access`・`deleted` の行は、名前・案件名・版番号・ID を返さない
 - 参考資料として新しく選べるのは、参加している、削除されていない案件の、削除されていない版だけ(`REFERENCE_UNAVAILABLE`)
 
@@ -1017,8 +1036,9 @@ design-spec の論理設計から引き継いだ規則。API はこれを守る(
 | レート制限 | Cloud Armor で IP ごとに、`/api/auth/*` は1分60回、それ以外の `/api/*` は1分600回。超えたら 429(ADR-007) |
 | セキュリティヘッダー | バックエンドバケットと Cloud Run の応答に `Strict-Transport-Security`、`X-Content-Type-Options: nosniff`、`Referrer-Policy: strict-origin-when-cross-origin`、`Content-Security-Policy`(`default-src 'self'`、Picker のために `script-src` に `https://apis.google.com`、`frame-src` に `https://docs.google.com https://drive.google.com https://accounts.google.com`、`img-src` に `https://*.googleusercontent.com`、`frame-ancestors 'none'`)を付ける |
 | 外部リンク | 資料を開くリンクは `target="_blank" rel="noopener noreferrer"` |
-| 個人情報 | 保存するのは、メール、Google の表示名とアイコン画像の URL、Google アカウントの ID(`google_subject`)、最終ログイン。資料名とリンクは業務上の秘密を含みうるので、ログに出さない。ログには利用者 ID を出し、メール・トークン・Cookie・リクエスト本文は出さない。DB は Cloud SQL の保存時暗号化(Google 管理の鍵)に任せる |
-| DB への接続 | Cloud SQL の承認済みネットワークは空。Cloud Run のサービスアカウントに `roles/cloudsql.client` だけを付ける |
+| 個人情報 | 保存するのは、メール、Google の表示名とアイコン画像の URL、Google アカウントの ID(`google_subject`)、最終ログイン。DB は Cloud SQL の保存時暗号化(Google 管理の鍵)に任せる |
+| ログ | 資料名とリンクは業務上の秘密を含みうるので、アプリはログに出さない。ログには利用者 ID を出し、メール・トークン・Cookie・リクエスト本文は出さない。例外として受け入れるもの: (1) LB と Cloud Run が自動で残す要求ログには URL の検索パラメーターがそのまま入る(ホームの `?q=`、`/api/search?q=`・候補の `?q=` の検索語)。(2) 画面の想定外のエラー(`POST /api/client-errors`)の `message` に資料名が入ることがある(`path` の検索パラメーターは落とし、長さを切る。5.10)。どちらもログは同じ GCP プロジェクトの中にだけあり、閲覧できるのはプロジェクトのオーナー(作者)だけ、保持は30日。検索語を残したくなったら、検索を POST の本文で送る形に変える |
+| DB への接続 | Cloud SQL の承認済みネットワークは空。DB への接続に使う権限は、Cloud Run のサービスアカウントの `roles/cloudsql.client` だけ(サービスアカウントのほかのロールは `docs/04_deployment-procedure.md` 3章) |
 | 開発用ログイン | 本番では起動時に拒否する(5.10) |
 
 ### パフォーマンス
@@ -1031,9 +1051,9 @@ design-spec の論理設計から引き継いだ規則。API はこれを守る(
 | 案件画面の表示(操作から表が出るまで) | 1.5秒以内 |
 
 - 資料の一覧は、系列・最新版・旧版の件数・タグを1本の SQL(ウィンドウ関数と集約)で取る。N+1 を作らない
-- インデックス: 6章のスキーマのとおり(系列・案件・参考される側・名前の trigram・リンクの部分一意)
+- インデックス: 6章のスキーマのとおり(系列・案件・参考される側・名前の trigram・リンクの部分一意)。名前の trigram は3文字以上の検索語で効く。2文字以下の検索語は全件を走査するが、想定規模(design-spec 1.2)では目標内に収まる
 - ページ分けはしない(design-spec 1.2 の想定規模: 1人数十案件、1案件数百系列)。想定を超えたら design-spec 9章の拡張候補
-- 接続プールはインスタンスごとに最大5、Cloud Run は最大3台(合計15 < db-f1-micro の上限 約25)
+- 接続プールはインスタンスごとに最大5、Cloud Run は最大3台(合計15 < db-f1-micro の上限 約25)。この2つの値は `infra/` と API の設定で、変えるときは掛け算が上限を超えないようにする
 - メタデータの取り直しは画面の表示を待たせない(表を出した後に呼ぶ。5.5)
 - 画面: ルートごとにコードを分割する。`/assets/*` はハッシュ付きで1年キャッシュ、`index.html` は `Cache-Control: no-cache`
 - Cloud Run の最小インスタンスは0(冷えた状態の初回は1〜2秒遅い。気になれば1にする。`docs/05_operation-runbook.md`)
@@ -1057,6 +1077,7 @@ design-spec の論理設計から引き継いだ規則。API はこれを守る(
 ```
 
 - `code` は安定した識別子。画面はこれで文言を選ぶ(翻訳ファイル)。`message` は開発者向けの英語で、画面には出さない
+- 例外: Cloud Armor のレート制限の 429 は LB が返すので、本文がこの形(JSON)にならない。画面は HTTP 429 を `RATE_LIMITED` として扱う
 - `details` はコードごとに決まった形(下の表)
 
 | code | HTTP | design-spec 6.0.2 の分類 | details | 起きる例 |
@@ -1084,8 +1105,8 @@ design-spec の論理設計から引き継いだ規則。API はこれを守る(
 | `DRIVE_FILE_NOT_ACCESSIBLE` | 422 | (失敗として扱わない。design-spec 6.0.9) | `{ fileId }` | アプリがまだ使えない・見る権限が無い |
 | `DRIVE_SOURCE_UNAVAILABLE` | 422 | 入力の問題 | — | コピー元が見つからない・開けない(design-spec 6.3) |
 | `DRIVE_CREATE_FAILED` | 502 | 通信・その他 | — | Drive での作成・コピーに失敗(design-spec 6.0.8) |
-| `DRIVE_CREATED_NOT_REGISTERED` | 500 / 404 / 403 | 6.0.8 | `{ file: { fileId, url }, cause: "internal" \| "not_found" \| "forbidden", causeCode: string }` | Drive には作れたが登録に失敗。`cause` が `internal` のときだけ画面は「このリンクで登録」を出す |
-| `RATE_LIMITED` | 429 | 通信・その他 | — | Cloud Armor(本文は Cloud Armor の既定) |
+| `DRIVE_CREATED_NOT_REGISTERED` | 500 / 404 / 403 | 6.0.8 | `{ file: { fileId, url }, cause: "internal" \| "not_found" \| "forbidden", causeCode: string }` | Drive には作れたが登録に失敗。画面の扱いは design-spec 6.0.8(`cause` が `internal` のときが「通信・その他の失敗」) |
+| `RATE_LIMITED` | 429 | 通信・その他 | — | Cloud Armor(本文は JSON でない。上の例外) |
 | `INTERNAL` | 500 | 通信・その他 | — | 想定外の例外 |
 | `SERVICE_UNAVAILABLE` | 503 | 通信・その他 | — | DB・Google に一時的につながらない |
 
@@ -1094,20 +1115,20 @@ design-spec の論理設計から引き継いだ規則。API はこれを守る(
 
 ### フロントエンドでの表示方針
 
-文言と画面の動きは design-spec 6.0.2 が正。画面は `code` を上の表の分類に当てはめて、design-spec のとおりに振る舞う。
+分類ごとの画面の動きと文言は design-spec 6.0.2(と 6.0.5・6.0.7・6.0.8・6.5.7)が正。画面は `code`(と HTTP 429)を上の表の分類に当てはめて振る舞う。実装で決めておくことだけをここに置く。
 
 | エラー種別 | 表示方法 |
 |-----------|----------|
-| バリデーションエラー(`VALIDATION_FAILED` と入力の問題の各コード) | ダイアログを閉じず、該当する欄の下に理由を出す。入力欄の無い操作は失敗の通知(design-spec 6.0.2「入力の問題」) |
-| 通信・サーバーエラー(`INTERNAL`・`SERVICE_UNAVAILABLE`・`RATE_LIMITED`・ネットワーク断) | 保存なら失敗の通知(自分で閉じるまで残す)、読み込みなら「読み込めませんでした」と「再読み込み」(design-spec 6.0.2「通信・その他」) |
-| 認可エラー(`ROLE_INSUFFICIENT`・`ADMIN_REQUIRED`・`ACCOUNT_SUSPENDED`・`UNAUTHENTICATED`・404 系) | design-spec 6.0.2「見つからない」「権限がない」と 6.0.7 に従う。401 は `/login?returnTo=...` へ |
-| 要再連携(`DRIVE_REAUTH_REQUIRED`) | `GET /api/me` の `drive.status` を要再連携に切り替え、帯とダイアログ内の表示を出す(design-spec 6.0.5) |
-| 想定外のエラー | 画面全体を描けないときはエラー境界で「問題が発生しました」(design-spec 6.5.7)。内容を `POST /api/client-errors` に送る |
+| バリデーションエラー | `VALIDATION_FAILED.details.fields` のキーで該当する欄を特定し、値(`too_long` 等)で翻訳ファイルの文言を選ぶ |
+| 通信・サーバーエラー | ネットワーク断(`fetch` の例外)も `INTERNAL` と同じ分類として扱う |
+| 認可エラー | 401 は `/login?returnTo={今のパス}` へ送る。404 系・403 系は分類どおり |
+| 想定外のエラー | エラー境界で捕まえ、内容を `POST /api/client-errors` に送る |
+| 要再連携 | `DRIVE_REAUTH_REQUIRED` を受けたら `GET /api/me` のキャッシュの `drive.status` を `needs_reauth` に書き換える(帯とダイアログの表示はそこから決まる) |
 
 ### ログとの対応
 
 - ロードバランサーが付ける `X-Cloud-Trace-Context`(無ければ乱数)からリクエスト ID を作り、応答ヘッダー `X-Request-Id` とすべてのログ行(`logging.googleapis.com/trace`)に入れる。Cloud Logging で LB のログとアプリのログがつながる
-- 4xx は `WARN`(`code` と利用者 ID)、5xx と想定外の例外は `ERROR`(スタックトレース付き。Error Reporting に集まる)
+- ログのレベルと項目は `docs/05_operation-runbook.md` 1章
 - 画面の通知には出さないが、失敗の通知の詳細(開発者向け)にリクエスト ID を持たせ、問い合わせのときに照合できるようにする
 
 ---
@@ -1118,11 +1139,11 @@ design-spec の論理設計から引き継いだ規則。API はこれを守る(
 - 翻訳ファイル: `apps/web/src/locales/ja.json`、`apps/web/src/locales/en.json`。1つの名前空間で、キーは画面・部品ごとに入れ子にする(例: `project.table.olderVersions`、`dialog.addDocument.title`、`errors.DUPLICATE_LINK`)。API のエラーコードの文言は `errors.{code}` に置く
 - 複数形: 英語は i18next の `_one` / `_other`(例: `common.documentCount_one: "{{count}} document"`、`_other: "{{count}} documents"`)。日本語は `_other` だけ
 - 用語の英語: design-spec 1.4 に従う
-- 表示言語の決め方: design-spec 1.2。ブラウザに保存するキーは `localStorage` の `weaponx.locale`。ログイン時は `GET /api/auth/google/login?locale=` で API に渡し、`users.locale` が空なら保存する。切り替えは `PATCH /api/me`
+- 表示言語の決め方: design-spec 1.2。ブラウザに保存するキーは `localStorage` の `weaponx.locale`。ログイン時の保存は 5.2(`locale` パラメーター)、切り替えは `PATCH /api/me`
 - 日時: `Intl.DateTimeFormat`、タイムゾーンはブラウザのもの。design-spec 1.2 の書式に合わせる(日本語は `ja-JP` の年月日・時分を2桁、英語は `en-US` の `month: "short"`)
 - 並べ替え: `Intl.Collator(表示言語)`
 - 翻訳しないもの(利用者の入力、Google から取った名前、アプリ名): design-spec 1.2
-- 数字: 件数・日付は等幅数字(`font-variant-numeric: tabular-nums`)。値は `docs/06_design-tokens.json`
+- 数字: 件数・日付の見た目は design-spec 4.4 と `docs/06_design-tokens.json` の `semantic.typography.numeric`
 - テスト: 日英の翻訳ファイルのキーが一致することを単体テストで確かめる(10章)
 
 ---
@@ -1134,7 +1155,7 @@ design-spec の論理設計から引き継いだ規則。API はこれを守る(
 | 単体 | bun test | `packages/shared` と `apps/api/src/domain` の行 90% | 入力の検証(書記素の数え方、上限)、名前の正規化、リンクの種別判定と `link_key`、タグのバッジの導出、関連資料の表示区分、エラーコードの分類、翻訳キーの日英一致、トークンの暗号化・復号 |
 | 結合(API) | bun test + PostgreSQL(Docker)+ ドライブの模擬 | `apps/api` の行 80% | 全エンドポイントの正常系と主なエラー。**7章の権限マトリクスの全行を、役割ごとに叩いて期待の HTTP ステータスになることを確かめる**。同時操作(同じ系列への2つの版の同時登録で番号が重ならない、最後のオーナー・管理者を同時に外せない、リンクの重複)。`no_access`・`deleted` の行が名前を返さないこと |
 | 画面(部品) | bun test + Testing Library(happy-dom) | 数値目標なし | タグ入力、参考資料のチップ、エラーコードから表示への変換、日時の書式 |
-| E2E | Playwright(Chromium)+ 開発用ログイン + ドライブの模擬 | design-spec 2.2 のフローを1本ずつ | 探して開く、横断検索、リンクで登録、新しく作る、新しい版を作る(模擬のファイル選択画面での許可を含む)、タグ、版の削除、招待と役割の変更、利用者の停止、要再連携の帯、日英の切り替え |
+| E2E | Playwright(Chromium)+ 開発用ログイン + ドライブの模擬 | design-spec 2.2 のフローを1本ずつ | 探して開く、横断検索、案件を作る、リンクで登録、新しく作る、これを元に作る(別の案件へ)、新しい版を作る(模擬のファイル選択画面での許可を含む)、新しい版を登録、タグと変更メモ、版の削除、招待と役割の変更、利用者の停止(停止された側の表示を含む)、要再連携の帯ともう一度連携する、日英の切り替え |
 | 本番の確認 | 手動(チェックリスト) | — | 本物の Google での同意・Picker・コピー(`docs/04_deployment-procedure.md` 6章) |
 
 - テスト用のデータは design-spec 8章のデモデータ(`make db-seed`)を土台にする
@@ -1144,13 +1165,14 @@ design-spec の論理設計から引き継いだ規則。API はこれを守る(
 
 ## 11. モニタリング・ログ
 
+方針は ADR-019。ログの項目・レベル・保持、アラートの閾値と通知先は `docs/05_operation-runbook.md` 1章・2章が正。
+
 | 項目 | ツール | 設定 |
 |------|--------|------|
-| アプリのログ | Cloud Logging | 構造化 JSON を標準出力へ。`severity`・`message`・`requestId`・`userId`・`route`・`status`・`durationMs`・`code`。保持30日(既定) |
-| LB のログ | Cloud Logging | バックエンドサービスとバックエンドバケットのログを有効化(サンプリング 100%) |
-| 例外 | Error Reporting | `ERROR` のログ(スタック付き)から自動で集める。新しい種類の例外はメールで通知 |
-| 画面の例外 | Cloud Logging(API 経由) | `POST /api/client-errors` を `ERROR` として記録 |
-| 稼働監視 | Cloud Monitoring のアップタイムチェック | `https://{DOMAIN}/api/healthz` を5分ごと、3地域から |
-| アラート | Cloud Monitoring のアラートポリシー | 詳細は `docs/05_operation-runbook.md` 2章。通知先はメール |
-| DB | Cloud SQL の組み込みメトリクス + Query Insights | CPU・メモリ・接続数・ストレージ。遅いクエリは Query Insights |
-| 費用 | Cloud Billing の予算アラート | 月 $50 の 50%・90%・100% でメール |
+| アプリのログ | Cloud Logging | 構造化 JSON を標準出力へ。リクエスト ID の付け方は8章「ログとの対応」 |
+| LB のログ | Cloud Logging | バックエンドサービスとバックエンドバケットのログを有効化 |
+| 例外 | Error Reporting | `ERROR` のログ(スタック付き)から自動で集める |
+| 画面の例外 | Cloud Logging(API 経由) | `POST /api/client-errors`(5.10、7章「ログ」) |
+| 稼働監視・アラート | Cloud Monitoring(アップタイムチェック、アラートポリシー、ログベースの指標) | `docs/05_operation-runbook.md` 2章 |
+| DB | Cloud SQL の組み込みメトリクス + Query Insights | 遅いクエリは Query Insights |
+| 費用 | Cloud Billing の予算アラート | `docs/05_operation-runbook.md` 2章 |

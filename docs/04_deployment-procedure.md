@@ -39,11 +39,11 @@
 
 ### CI/CD ワークフロー
 
-どのワークフローも `docs/03_dev-setup.md` 8章の make のターゲットを呼ぶ(ランナーの上で Docker Compose を使う)。
+テストとビルドは `docs/03_dev-setup.md` 8章の make のターゲットで行う(ランナーの上で Docker Compose を使う)。配布(イメージの push、バケットへのコピー、Cloud Run の更新、ジョブの実行)は、ワークフローから gcloud を直接呼ぶ。
 
 **ci.yml**: 全PRと main への push:
 ```
-make setup(CI 用) → make lint → make typecheck → make test → make e2e → make build → make tokens して差分が無いこと
+make setup → make lint → make typecheck → make test → make e2e → make build → make tokens して差分が無いこと
 ```
 
 **build.yml**: mainマージ時:
@@ -57,9 +57,10 @@ make build → API のイメージを asia-northeast1-docker.pkg.dev/{PROJECT_ID
 1. バージョンのイメージと画面の静的ファイルがそろっているか確かめる(無ければ止める)
 2. マイグレーション: Cloud Run ジョブ weaponx-migrate のイメージをそのバージョンに更新して実行し、終わるまで待つ
 3. API: Cloud Run weaponx-api にそのバージョンのイメージで新しいリビジョンを出し、トラフィックを 100% 移す(APP_VERSION も更新)
-4. 画面: releases の assets/ を weaponx-web の assets/ にコピー(古いファイルは消さない。Cache-Control: public, max-age=31536000, immutable)
-   → 最後に index.html をコピー(Cache-Control: no-cache)
+4. 画面: gs://{PROJECT_ID}-weaponx-releases/web/{バージョン}/assets/ を gs://{PROJECT_ID}-weaponx-web/assets/ にコピー(古いファイルは消さない)
+   → 最後に index.html をコピー(どちらも Cache-Control は 02-01 7章「パフォーマンス」のとおりに付ける)
 5. 確認: /api/healthz の version がそのバージョン、/api/readyz が 200、/ が 200
+6. 保管: イメージに prod-{バージョン} のタグを付け、画面のビルドを gs://{PROJECT_ID}-weaponx-releases/deployed/{バージョン}/ にも写す(本番に出したバージョンは自動の削除の対象外にする。5章)
 ```
 
 順番の理由: DB → API → 画面の順に新しくする。マイグレーションは1つ前の版の API でも動く追加的な変更に限り(5章)、新しい API は1つ前の画面からの呼び出しも受け付ける。途中で止まっても、動いている組み合わせが壊れない。
@@ -74,9 +75,12 @@ main merge時: terraform apply
 
 ### Step 1: 手動で最低限の準備
 
+`make` のターゲットは手元(ホスト)で実行する。`make ops-shell` で入ったコンテナの中では `gcloud`・`terraform`・`openssl` を直接使い、`make` は使わない。
+
 ```bash
+# ホストで
 make ops-login        # gcloud auth login と application-default login
-make ops-shell        # 以降はコンテナの中
+make ops-shell        # ops のコンテナのシェルに入る。以降 Step 1 はコンテナの中
 
 # プロジェクト作成と課金の紐付け(課金アカウント ID はコンソールで確認)
 gcloud projects create {PROJECT_ID}
@@ -96,6 +100,7 @@ gcloud services enable \
   cloudresourcemanager.googleapis.com \
   monitoring.googleapis.com \
   logging.googleapis.com \
+  billingbudgets.googleapis.com \
   drive.googleapis.com
 # Google Picker API はコンソールの「API とサービス」→「ライブラリ」で「Google Picker API」を有効にする
 
@@ -114,7 +119,7 @@ gcloud projects describe {PROJECT_ID} --format='value(projectNumber)'
    - ユーザーの種類: **外部**
    - アプリ名 `weaponx`、サポートメール、承認済みドメイン(`{DOMAIN}` の親ドメイン)
    - データアクセス(範囲): `openid`、`.../auth/userinfo.email`、`.../auth/userinfo.profile`、`.../auth/drive.file`
-   - 公開ステータス: **本番環境**にする(「テスト」のままだとリフレッシュトークンが7日で切れる。`drive.file` だけなので審査は要らない。ADR-011)
+   - 公開ステータス: **本番環境**にする(理由は `docs/02-01_system-design-doc.md` ADR-011)
 2. 「認証情報」→ OAuth クライアント ID(ウェブ アプリケーション)、名前 `weaponx-production`
    - 承認済みの JavaScript 生成元: `https://{DOMAIN}`
    - 承認済みのリダイレクト URI: `https://{DOMAIN}/api/auth/google/callback`
@@ -122,49 +127,51 @@ gcloud projects describe {PROJECT_ID} --format='value(projectNumber)'
    - アプリケーションの制限: ウェブサイト `https://{DOMAIN}/*`
    - API の制限: Google Picker API
 
-### Step 3: Terraformで残りを構築
+### Step 3: Terraformで残りを構築(1回目: アプリ以外)
+
+Cloud Run はシークレットの値が無いと起動できないので、Terraform は2回に分けて適用する。1回目はアプリ(Cloud Run のサービスとジョブ)を作らない。
 
 ```bash
+# ホストで
 cp infra/environments/production.tfvars.example infra/environments/production.tfvars
 # production.tfvars を編集: project_id, project_number, region(asia-northeast1), domain,
-#   google_client_id, google_picker_api_key, github_repository(eastasann/weaponx), alert_email
+#   google_client_id, google_picker_api_key, github_repository(eastasann/weaponx),
+#   alert_email, billing_account_id, app_enabled = false
 make tf-init
 make tf-plan
 make tf-apply
 ```
 
-Terraformが作成するリソース:
+Terraformが作成するリソース(名前と役割。設定値の正は `infra/`):
 
-- ロードバランサー一式: グローバル IP、Google マネージド SSL 証明書、HTTPS プロキシ、HTTP→HTTPS 転送、URL マップ(`/api/*` → Cloud Run、`/assets/*` → バケット、それ以外 → バケットの `/index.html` に書き換え)
-- Cloud Armor のポリシー `weaponx-api-policy`(レート制限。`docs/02-01_system-design-doc.md` 7章)
-- Cloud Run サービス `weaponx-api`(受信は内部と LB のみ、最小0・最大3、Cloud SQL 接続、Secret Manager の環境変数)とサーバーレス NEG
-- Cloud Run ジョブ `weaponx-migrate`
-- Cloud Storage: `{PROJECT_ID}-weaponx-web`(配信。バックエンドバケット、Cloud CDN)、`{PROJECT_ID}-weaponx-releases`(画面のビルドの保管。90日で削除)
-- Cloud SQL インスタンス `weaponx-db`(PostgreSQL 16、db-f1-micro、SSD 10GB、自動バックアップ7日、ポイントインタイムリカバリ、承認済みネットワークなし)とデータベース `weaponx`
-- Artifact Registry リポジトリ `weaponx`(古いイメージは最新20件を残して削除)
-- Secret Manager のシークレット(入れ物だけ): `weaponx-database-url`、`weaponx-google-client-secret`、`weaponx-token-encryption-keys`
-- サービスアカウント: `weaponx-api`(実行用。Cloud SQL クライアント、シークレットの読み取り、ログ・トレースの書き込み)、`weaponx-deployer`(GitHub Actions 用。Cloud Run の更新、イメージの push、バケットへの書き込み、ジョブの実行)
-- Workload Identity プール `github` とプロバイダー(`eastasann/weaponx` のリポジトリだけを許可)
-- Cloud Monitoring: アップタイムチェック、アラートポリシー、メールの通知チャネル(`docs/05_operation-runbook.md` 2章)。予算アラート
+| リソース | 名前 | 役割 |
+|---------|------|------|
+| グローバル IP・Google マネージド証明書 | `weaponx-ip`、`weaponx-cert` | `{DOMAIN}` の入口 |
+| URL マップ・HTTPS プロキシ・転送ルール | `weaponx-url-map` ほか | `/api/*` → `weaponx-api-backend`、`/assets/*` → `weaponx-web-backend`、それ以外 → `weaponx-web-backend` の `/index.html`。HTTP は HTTPS へ転送 |
+| バックエンドサービス | `weaponx-api-backend` | サーバーレス NEG `weaponx-api-neg` 経由で Cloud Run へ。Cloud Armor のポリシー `weaponx-api-policy` を付ける |
+| バックエンドバケット | `weaponx-web-backend` | `{PROJECT_ID}-weaponx-web` を Cloud CDN 付きで配る |
+| Cloud Storage | `{PROJECT_ID}-weaponx-web`、`{PROJECT_ID}-weaponx-releases` | 配信する画面 / バージョンごとの画面のビルドの保管 |
+| Cloud SQL | インスタンス `weaponx-db`、データベース `weaponx` | 本番の DB(構成は 02-01 ADR-008) |
+| Artifact Registry | `weaponx` | API のイメージ |
+| Secret Manager(入れ物だけ) | `weaponx-database-url`、`weaponx-google-client-secret`、`weaponx-token-encryption-keys` | 値は Step 4 で入れる |
+| サービスアカウント | `weaponx-api`、`weaponx-deployer` | 実行用(Cloud SQL クライアント、シークレットの読み取り、ログ・トレースの書き込み)/ GitHub Actions 用(Cloud Run とジョブの更新・実行、イメージの push、バケットへの書き込み) |
+| Workload Identity | プール `github` とプロバイダー | `eastasann/weaponx` のリポジトリだけを許可 |
+| Cloud Monitoring・予算 | — | アップタイムチェック、アラートポリシー、ログベースの指標、メールの通知チャネル、予算アラート(`docs/05_operation-runbook.md` 2章) |
+| Cloud Run(2回目で作る) | サービス `weaponx-api`、ジョブ `weaponx-migrate` | API / マイグレーションと初期管理者の登録。ジョブは API と同じイメージで、作業ディレクトリは `apps/api` |
 
-- Cloud Run のイメージは、初回は Google のサンプルのイメージで作り、以降は `deploy.yml` が更新する(Terraform はイメージの変更を無視する)
-- 秘密の値(DB のパスワード・クライアントシークレット・暗号化鍵)は Terraform に渡さない(Step 5)
-
-### Step 4: DNS と証明書
+DNS を先に向けておくと、証明書の発行を待つ時間を後の手順と重ねられる。
 
 ```bash
-terraform -chdir=infra output lb_ip_address
+# ホストで(ops のコンテナの中なら terraform -chdir=infra output lb_ip_address)
+make tf-output NAME=lb_ip_address
 ```
 
-`{DOMAIN}` の A レコードをこの IP に向ける。Google マネージド証明書が `ACTIVE` になるまで15〜60分かかる。
+`{DOMAIN}` の A レコードをこの IP に向ける。Google マネージド証明書が `ACTIVE` になるまで15〜60分かかる(ops のコンテナで `gcloud compute ssl-certificates describe weaponx-cert --global --format='value(managed.status)'`)。
+
+### Step 4: シークレットの値と DB 利用者
 
 ```bash
-gcloud compute ssl-certificates describe weaponx-cert --global --format='value(managed.status)'
-```
-
-### Step 5: シークレットの値と DB 利用者
-
-```bash
+# ops のコンテナの中で
 # DB の利用者(パスワードは記号を含まない16進にし、URL に入れやすくする)
 DB_PASSWORD=$(openssl rand -hex 24)
 gcloud sql users create weaponx_app --instance=weaponx-db --password="$DB_PASSWORD"
@@ -180,6 +187,28 @@ printf 'k1:%s' "$(openssl rand -base64 32)" | gcloud secrets versions add weapon
 unset DB_PASSWORD
 ```
 
+### Step 5: Terraformで残りを構築(2回目: アプリ)
+
+`production.tfvars` の `app_enabled` を `true` にして、ホストで `make tf-plan` → `make tf-apply`。Cloud Run のサービスとジョブができる(イメージは Google のサンプル。以降は `deploy.yml` が更新し、Terraform はイメージの変更を無視する)。
+
+本番の環境変数(Terraform が Cloud Run に設定する):
+
+| 変数 | 本番の値 | 入れ場所 |
+|------|---------|---------|
+| `NODE_ENV` | `production` | Terraform(固定) |
+| `APP_ORIGIN` | `https://{DOMAIN}` | Terraform(`domain` から) |
+| `PORT` | Cloud Run が入れる(8080) | Cloud Run |
+| `LOG_LEVEL` | `info` | Terraform(固定) |
+| `APP_VERSION` | デプロイしたバージョン | `deploy.yml` |
+| `DRIVE_MODE` | `google` | Terraform(固定。`mock` だと API は起動しない。02-01 5.10) |
+| `DEV_LOGIN_ENABLED` | `false` | Terraform(固定。`true` だと API は起動しない。02-01 5.10) |
+| `GOOGLE_CLIENT_ID` | Step 2 の `weaponx-production` | `production.tfvars` |
+| `GOOGLE_PICKER_API_KEY` | Step 2 の `weaponx-picker` | `production.tfvars` |
+| `GOOGLE_PROJECT_NUMBER` | Step 1 で確かめたプロジェクト番号 | `production.tfvars` |
+| `DATABASE_URL` | Step 4 | Secret Manager `weaponx-database-url` |
+| `GOOGLE_CLIENT_SECRET` | Step 4 | Secret Manager `weaponx-google-client-secret` |
+| `TOKEN_ENCRYPTION_KEYS` | Step 4 | Secret Manager `weaponx-token-encryption-keys` |
+
 ### Step 6: GitHub の設定
 
 リポジトリの Settings → Secrets and variables → Actions の **Variables**(鍵ファイルは使わないので Secrets は不要):
@@ -188,8 +217,8 @@ unset DB_PASSWORD
 |------------|------|
 | `GCP_PROJECT_ID` | `{PROJECT_ID}` |
 | `GCP_REGION` | `asia-northeast1` |
-| `GCP_WIF_PROVIDER` | `terraform output wif_provider` の値 |
-| `GCP_DEPLOY_SA` | `terraform output deployer_service_account` の値 |
+| `GCP_WIF_PROVIDER` | `make tf-output NAME=wif_provider` の値 |
+| `GCP_DEPLOY_SA` | `make tf-output NAME=deployer_service_account` の値 |
 
 ブランチ保護(`main`): PR 必須、`ci.yml` の成功必須、squash マージだけを許可。
 
@@ -200,8 +229,9 @@ unset DB_PASSWORD
 3. 最初の管理者を登録する(管理者が1人もいないときだけ登録できる):
 
 ```bash
+# ops のコンテナの中で(ジョブの作業ディレクトリは apps/api)
 gcloud run jobs execute weaponx-migrate --region=asia-northeast1 --wait \
-  --args="bun,run,scripts/bootstrap-admin.ts,--email=you@example.com"
+  --command=bun --args="run,scripts/bootstrap-admin.ts,--email=you@example.com"
 ```
 
 4. https://{DOMAIN} を開き、そのメールの Google アカウントでログインする。以降の利用者は利用者管理(A1)から追加する
@@ -222,6 +252,8 @@ gcloud run jobs execute weaponx-migrate --region=asia-northeast1 --wait \
 
 `deploy/production/version` を前のバージョンに戻すPR(promotion PRのrevert)をマージする。デプロイと同じパイプラインが走り、API と画面が前のバージョンに戻る(マイグレーションは戻らない。下の「DB」)。以下は緊急時にCLIで直接戻す手順。
 
+本番に出したことのあるバージョンのイメージ(`prod-` のタグ付き)と画面のビルド(`deployed/`)は、自動の削除の対象外なので、いつでも戻せる。一度も本番に出していないバージョンが保管期間を過ぎて消えていたら、git タグ `build-{バージョン}` から `build.yml` を手動で実行して作り直す。
+
 ### アプリケーションの緊急ロールバック
 
 ```bash
@@ -231,7 +263,7 @@ gcloud run services update-traffic weaponx-api --region=asia-northeast1 \
   --to-revisions={前のリビジョン}=100
 
 # 画面: 前のバージョンの index.html を戻す(assets/ は消していないので残っている)
-gcloud storage cp gs://{PROJECT_ID}-weaponx-releases/web/{前のバージョン}/index.html \
+gcloud storage cp gs://{PROJECT_ID}-weaponx-releases/deployed/{前のバージョン}/index.html \
   gs://{PROJECT_ID}-weaponx-web/index.html --cache-control=no-cache
 ```
 
@@ -262,7 +294,7 @@ make tf-apply
 - [ ] アプリケーションログに `ERROR` が無いこと(`docs/05_operation-runbook.md` 4章)
 - [ ] 本物の Google アカウントでログインでき、ホームに案件が並ぶこと
 - [ ] 案件を開き、横パネルで版・参考資料が出ること
-- [ ] (作成・コピー・Picker を変えたリリースのとき)資料を追加の「新しく作る」でドライブにファイルができ、編集画面が開くこと。「ドライブから選ぶ」で Picker が開くこと
+- [ ] (作成・コピー・Picker を変えたリリースのとき)資料を追加の「新しく作る」でドライブにファイルができ、編集画面が開くこと。「これを元に作る」でコピーができること。「ドライブから選ぶ」で Picker が開くこと
 - [ ] ブラウザの開発者ツールで、CSP の違反が出ていないこと
 
 ## 7. 緊急時連絡先

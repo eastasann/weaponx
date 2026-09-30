@@ -365,52 +365,6 @@
           }
         }
       },
-      "green": {
-        "50": {
-          "$value": {
-            "colorSpace": "srgb",
-            "components": [
-              0.9412,
-              0.9922,
-              0.9569
-            ],
-            "hex": "#f0fdf4"
-          }
-        },
-        "400": {
-          "$value": {
-            "colorSpace": "srgb",
-            "components": [
-              0.2902,
-              0.8706,
-              0.502
-            ],
-            "hex": "#4ade80"
-          }
-        },
-        "700": {
-          "$value": {
-            "colorSpace": "srgb",
-            "components": [
-              0.0824,
-              0.502,
-              0.2392
-            ],
-            "hex": "#15803d"
-          }
-        },
-        "950": {
-          "$value": {
-            "colorSpace": "srgb",
-            "components": [
-              0.0196,
-              0.1804,
-              0.0863
-            ],
-            "hex": "#052e16"
-          }
-        }
-      },
       "white": {
         "$value": {
           "colorSpace": "srgb",
@@ -798,7 +752,7 @@
         },
         "warning": {
           "$value": "{primitive.color.amber.700}",
-          "$description": "警告の文字・アイコン(要再連携)"
+          "$description": "警告の文字・アイコン(要再連携の帯、停止の確認の警告文)"
         },
         "warning-surface": {
           "$value": "{primitive.color.amber.50}",
@@ -810,7 +764,7 @@
         },
         "danger": {
           "$value": "{primitive.color.red.700}",
-          "$description": "危険の文字・アイコン・入力欄の下の理由"
+          "$description": "危険の文字・アイコン(失敗の通知、入力欄の下の理由)"
         },
         "danger-solid": {
           "$value": "{primitive.color.red.600}",
@@ -829,11 +783,11 @@
           "$description": "失敗の通知の地"
         },
         "success": {
-          "$value": "{primitive.color.green.700}",
-          "$description": "成功の通知のアイコン"
+          "$value": "{primitive.color.blue.700}",
+          "$description": "成功の通知のアイコン(色を増やさず基調の青。design-spec 4.4)"
         },
         "success-surface": {
-          "$value": "{primitive.color.green.50}",
+          "$value": "{primitive.color.blue.50}",
           "$description": "成功の通知の地"
         },
         "scrim": {
@@ -925,10 +879,10 @@
           "$value": "{primitive.color.red.950}"
         },
         "success": {
-          "$value": "{primitive.color.green.400}"
+          "$value": "{primitive.color.blue.400}"
         },
         "success-surface": {
-          "$value": "{primitive.color.green.950}"
+          "$value": "{primitive.color.blue.950}"
         },
         "scrim": {
           "$value": "{primitive.color.scrim.dark}"

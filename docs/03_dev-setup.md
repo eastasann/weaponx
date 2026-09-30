@@ -24,6 +24,19 @@
 | PostgreSQL 16 | `compose.yaml` の `db` | 開発用・テスト用 DB |
 | Terraform・gcloud・openssl | `docker/ops.Dockerfile` | インフラ(5章)・初回のクラウド設定・秘密の値の生成 |
 
+Compose のサービス(`compose.yaml`):
+
+| サービス | イメージ | 役割 |
+|---------|---------|------|
+| `db` | `postgres:16` | 開発用 DB(`weaponx`)とテスト用 DB(`weaponx_test`)。:5432 |
+| `api` | `docker/dev.Dockerfile`(`oven/bun` ベース) | `bun --watch` で API を起動。:3000 |
+| `web` | 同上 | Vite の開発サーバー。:5173。`/api` を `api:3000` へ転送 |
+| `tools` | 同上 | 依存のインストール・テスト・Lint・マイグレーションなどの単発コマンド。Dev Container もここにつなぐ |
+| `e2e` | `mcr.microsoft.com/playwright`(Node.js 入り) | Playwright。`e2e` プロファイルのときだけ起動。レポートは :9323 |
+| `ops` | `docker/ops.Dockerfile`(`google/cloud-sdk` + Terraform + openssl) | インフラ作業用。`ops` プロファイルのときだけ起動。gcloud の認証情報は名前付きボリュームに保存 |
+
+リポジトリはバインドマウントで、`node_modules` も手元のディレクトリに Linux 用として入る。手元で依存をインストールしない(11章)。
+
 ### アカウント(デプロイ時に必要。ローカル開発は不要)
 
 | サービス | 用途 |
@@ -113,7 +126,7 @@ make dev
 
 | 変数 | ローカルの値 | 説明 |
 |------|-------------|------|
-| `NODE_ENV` | `development` | `production` のときは開発用ログインを拒否する |
+| `NODE_ENV` | `development` | `production` では開発用ログインを有効にできない(`docs/02-01_system-design-doc.md` 5.10) |
 | `APP_ORIGIN` | `http://localhost:5173` | 画面のオリジン。CSRF の確認と OAuth の戻り先に使う |
 | `PORT` | `3000` | API の待ち受け |
 | `LOG_LEVEL` | `debug` | `debug` / `info` / `warn` / `error` |
@@ -127,6 +140,8 @@ make dev
 | `GOOGLE_PICKER_API_KEY` | 空 | 同上。Picker 用の API キー |
 | `GOOGLE_PROJECT_NUMBER` | 空 | 同上。Picker の App ID(GCP のプロジェクト番号) |
 | `TOKEN_ENCRYPTION_KEYS` | `local:{32バイトの base64}` | Google のリフレッシュトークンの暗号化鍵(ADR-012) |
+| `WATCH_POLLING` | 空 | `true` にすると Vite と `bun --watch` がファイルの変更をポーリングで検知する(11章) |
+| `UID` / `GID` | 空 | Linux で、コンテナが作るファイルの持ち主を手元の利用者に合わせる(11章) |
 
 本番の値の入れ方は `docs/04_deployment-procedure.md` 3章。
 
@@ -137,16 +152,16 @@ make dev
 | コマンド | 内容 |
 |---------|------|
 | `make db-up` | DB のコンテナだけを起動する |
-| `make db-generate` | `apps/api/src/db/schema.ts` の変更からマイグレーション(SQL)を生成する(`drizzle-kit generate`) |
+| `make db-generate` | `apps/api/src/db/schema.ts` の変更からマイグレーション(SQL)を生成する |
 | `make db-migrate` | マイグレーションを開発用 DB に適用する |
 | `make db-push` | スキーマを開発用 DB に直接反映する(試行錯誤用。マイグレーションは作られないので、確定したら `make db-generate` する) |
 | `make db-seed` | デモデータ(design-spec 8章)を入れる。既存のデータは消す |
 | `make db-reset` | 開発用 DB を作り直し、マイグレーションとデモデータを入れ直す |
-| `make db-studio` | Drizzle Studio を起動する(http://local.drizzle.studio、DB は :4983 で公開) |
+| `make db-studio` | Drizzle Studio を起動する(http://local.drizzle.studio を開く) |
 | `make db-psql` | 開発用 DB に psql でつなぐ |
 
 - スキーマを変えたら、`make db-generate` で生成した SQL を確かめてからコミットする。拡張の作成など手書きが要るときは `make db-generate CUSTOM=1`
-- マイグレーションは、1つ前の版のアプリでも動く追加的な変更に限る(`docs/04_deployment-procedure.md` 5章)
+- マイグレーションの書き方の制約(1つ前の版の API でも動くこと)は `docs/04_deployment-procedure.md` 5章
 
 ---
 
@@ -172,26 +187,9 @@ make ops-shell
 - 変数は `infra/environments/production.tfvars`(プロジェクト ID、リージョン、ドメインなど。秘密は含めない)
 - 作るリソースの一覧は `docs/04_deployment-procedure.md` 3章
 
-### CI/CD連携
+### CI/CD連携とtfstate
 
-GitHub Actions の `infra.yml`:
-
-- `infra/` を変える PR: `terraform plan` を実行し、差分を PR にコメントする
-- `main` へのマージ: `terraform apply` を実行する
-
-### tfstateの管理
-
-```hcl
-# infra/backend.tf
-terraform {
-  backend "gcs" {
-    bucket = "{PROJECT_ID}-tfstate"
-    prefix = "weaponx/production"
-  }
-}
-```
-
-tfstate のバケットは Terraform の外で1回だけ作る(`docs/04_deployment-procedure.md` 3章 Step 1)。
+インフラの変更の流れ(PR で plan、main へのマージで apply)は `docs/04_deployment-procedure.md` 2章、state の置き場所は `docs/02-01_system-design-doc.md` ADR-015。
 
 ---
 
@@ -205,7 +203,8 @@ tfstate のバケットは Terraform の外で1回だけ作る(`docs/04_deployme
 2. 承認済みの JavaScript 生成元: `http://localhost:5173`
 3. 承認済みのリダイレクト URI: `http://localhost:5173/api/auth/google/callback`
 4. 「認証情報」→「API キーを作成」。名前は `weaponx-picker-local`。アプリケーションの制限は「ウェブサイト」で `http://localhost:5173/*`、API の制限は「Google Picker API」
-5. `.env` を次のように変え、`make dev` をやり直す
+5. 自分の Google アカウントのメールを利用者として登録しておく。開発用ログインのまま管理者(例: 山田 太郎)で入り、利用者管理(A1)から自分のメールを追加する(空の DB から始めるときは `make bootstrap-admin EMAIL=you@example.com`。管理者が1人もいないときだけ登録できる)
+6. `.env` を次のように変え、`make dev` をやり直す
 
 ```bash
 DEV_LOGIN_ENABLED=false
@@ -216,7 +215,7 @@ GOOGLE_PICKER_API_KEY=AIzaxxxxxxxx
 GOOGLE_PROJECT_NUMBER=123456789012
 ```
 
-6. 自分のメールを利用者として登録する: `make bootstrap-admin EMAIL=you@example.com`(管理者が1人もいないときだけ登録できる。いるときは開発用ログインで管理者として入り、利用者管理から追加する)
+7. http://localhost:5173 で「Google でログイン」を押し、手順5のメールのアカウントで入る
 
 OAuth 同意画面・Drive API・Picker API の有効化は、本番の設定(`docs/04_deployment-procedure.md` 3章 Step 2)と共通。
 
@@ -244,7 +243,7 @@ make e2e-report
 
 ## 8. 主要コマンド(Makefile)
 
-**Makefileが実コマンドの唯一の真実源。** docs・CLAUDE.md・実装プロンプトは以下の標準ターゲット名だけを参照し、スタック固有の実コマンド(`docker compose` / `bun` / `drizzle-kit` / `terraform` 等)はMakefileの中にだけ書く。コマンドを変えるときはMakefileだけを直す。
+**Makefileが実コマンドの唯一の真実源。** docs・CLAUDE.md・実装プロンプトは以下の標準ターゲット名だけを参照し(例外: `docs/04_deployment-procedure.md`・`docs/05_operation-runbook.md` の運用手順に出てくる gcloud・terraform・SQL。本番に対する一度きりの操作なので make にしない)、スタック固有の実コマンド(`docker compose` / `bun` / `drizzle-kit` / `terraform` 等)はMakefileの中にだけ書く。コマンドを変えるときはMakefileだけを直す。
 
 | ターゲット | 説明 |
 |-----------|------|
@@ -257,7 +256,7 @@ make e2e-report
 | `make e2e-report` | 直前の E2E のレポートを http://localhost:9323 で開く |
 | `make lint` | Linter実行(Biome) |
 | `make format` | Formatter実行(Biome) |
-| `make typecheck` | 型チェック(`tsc --noEmit`、全ワークスペース) |
+| `make typecheck` | 型チェック(全ワークスペース) |
 | `make tokens` | `docs/06_design-tokens.json` から `apps/web/src/styles/tokens.css` を生成 |
 | `make db-up` | DB のコンテナだけ起動 |
 | `make db-push` | スキーマ反映(開発用) |
@@ -270,26 +269,13 @@ make e2e-report
 | `make bootstrap-admin EMAIL=...` | 管理者が1人もいないときに、最初の管理者を登録する |
 | `make ops-login` / `make ops-shell` | gcloud のログイン / ops のコンテナのシェル |
 | `make tf-init` / `make tf-plan` / `make tf-apply` | Terraform |
+| `make tf-output NAME=...` | Terraform の出力値を1つ表示する |
 | `make doc-lint` | ドキュメントと実体の整合検査(`scripts/doc-lint.sh --docs`) |
 | `make shell` | `tools` のコンテナのシェル(Bun・drizzle-kit などを直接使うとき) |
 | `make deps-update` | 依存パッケージを更新する(`tools` のコンテナで実行) |
 | `make clean` | コンテナ・ボリューム・`node_modules`・ビルド成果物を消す |
 
-```makefile
-# 例: 各ターゲットは docker compose の実コマンドへ委譲する薄いラッパー
-.PHONY: setup dev stop build test e2e e2e-report lint format typecheck tokens db-up db-push db-generate db-migrate db-seed db-reset db-studio db-psql bootstrap-admin shell deps-update ops-login ops-shell tf-init tf-plan tf-apply doc-lint clean
-
-RUN := docker compose run --rm tools
-
-dev:
-	docker compose up api web
-
-test:
-	$(RUN) bun run test $(ARGS)
-
-lint:
-	$(RUN) bunx biome check .
-```
+各ターゲットは Compose のサービスで実コマンドを動かす薄いラッパーにする(実体は Makefile にだけ書く)。
 
 ※ makeはmacOS/Linuxに標準搭載。Windowsで開発する場合はWSLを使う。存在する操作は必ずこの標準名で提供する。
 
@@ -300,7 +286,7 @@ lint:
 GitHub Flow + GitOps環境プロモーション方式。長命ブランチは `main` のみで、リリースはブランチではなく本番のバージョン宣言ファイルで管理する。ステージングは持たない(`docs/02-01_system-design-doc.md` ADR-016)。
 
 ```
-feature/xxx ──squash──▶ main ──CI自動──▶ アーティファクトのビルド(バージョン = コミットSHAの先頭12文字)
+feature/xxx ──squash──▶ main ──CI自動──▶ 本番に出せるアーティファクトのビルド
 fix/xxx    ──squash──▶   │
                          └─ promotion PR(deploy/production/version を更新)──▶ production
 ```
@@ -320,16 +306,16 @@ fix/xxx    ──squash──▶   │
 
 `deploy/production/version` が「本番で動くべきバージョン」の唯一の真実。
 
-1. mainへのsquashマージ → CI(`build.yml`)が API のイメージと画面の静的ファイルをビルドし、バージョン(コミット SHA の先頭12文字)を付けて保存する。git タグ `build-{バージョン}` も付ける
-2. ローカルで E2E が通っていることと、リリース前チェックリスト(`docs/04_deployment-procedure.md` 4章)を確かめ、`deploy/production/version` をそのバージョンに更新する **promotion PR** を作成・マージ → 本番へデプロイ
+1. mainへのsquashマージ → CI がバージョンを付けたアーティファクトを作る
+2. リリース前チェックリスト(`docs/04_deployment-procedure.md` 4章)を確かめ、`deploy/production/version` をそのバージョンに更新する **promotion PR** を作成・マージ → 本番へデプロイ
 3. ロールバック = promotion PR をrevert
 
-パイプラインの詳細は `docs/04_deployment-procedure.md` を参照。
+バージョンの付け方、ワークフロー(`ci.yml`・`build.yml`・`deploy.yml`・`infra.yml`)の中身は `docs/04_deployment-procedure.md` 2章。この方式を選んだ理由は `docs/02-01_system-design-doc.md` ADR-022。
 
 ### PRルール
 
 - `main` へのマージはPR必須(squash)
-- CIが通ること(lint + typecheck + test + e2e + build)
+- CI(`docs/04_deployment-procedure.md` 2章の `ci.yml`)が通ること
 - セルフレビュー可(1人開発のため)
 - コミットメッセージ: Conventional Commits(`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`)
 - コミットメッセージの言語: 英語(サブジェクト・ボディとも)
@@ -345,7 +331,7 @@ fix/xxx    ──squash──▶   │
 | ツール | 設定 |
 |--------|------|
 | Biome(Lint + 整形) | `biome.json`。インデント2スペース、行幅100、ダブルクオート、`import` の並べ替えを有効。`apps/web/src/styles/tokens.css` と `apps/api/drizzle/` は対象外 |
-| TypeScript(型チェック) | 各ワークスペースの `tsconfig.json`。`strict: true`、`noUncheckedIndexedAccess: true` |
+| TypeScript(型チェック) | 各ワークスペースの `tsconfig.json`。`strict: true`、`noUncheckedIndexedAccess: true`。`make typecheck` で確かめる |
 | git フック | `.githooks/pre-commit` で `make lint` を実行(`make setup` が `core.hooksPath` を設定) |
 
 ---

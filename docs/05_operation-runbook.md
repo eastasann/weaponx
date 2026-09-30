@@ -15,7 +15,7 @@
 | Cloud SQL | Cloud Logging(`cloudsql_database`) | 30日 | PostgreSQL のエラー、遅いクエリ(1秒以上)。Query Insights |
 | 監査ログ(管理アクティビティ) | Cloud Logging(`_Required`) | 400日 | GCP のリソースの変更(Terraform・gcloud の操作) |
 
-ログに出さないもの: メール、トークン、Cookie、リクエスト本文、資料名とリンク(`docs/02-01_system-design-doc.md` 7章)。
+ログに出すもの・出さないもの、例外として受け入れるものは `docs/02-01_system-design-doc.md` 7章「ログ」。`route` は `メソッド + ルートのテンプレート`(例: `GET /api/projects/:projectId/series`)で、ID や検索パラメーターを含めない。
 
 アプリが出す主な `event`:
 
@@ -44,7 +44,7 @@ Terraform(`infra/monitoring.tf`)で作る。通知はすべてメール(`alert_e
 | 監視対象 | メトリクス | 閾値 | アラート先 |
 |----------|-----------|------|-----------|
 | 稼働 | アップタイムチェック `https://{DOMAIN}/api/healthz`(5分ごと、3地域) | 2回続けて失敗 | メール |
-| API の失敗率 | LB のバックエンドサービス `weaponx-api` の 5xx の割合 | 5分間で 5% 超 | メール |
+| API の失敗率 | LB のバックエンドサービス `weaponx-api-backend` の 5xx の割合 | 5分間で 5% 超 | メール |
 | API の遅延 | LB のバックエンドの遅延 p95 | 10分間 2秒超 | メール |
 | 例外 | Error Reporting の新しいエラーグループ | 1件でも | メール(Error Reporting の通知) |
 | 要再連携の急増 | ログベースの指標 `event="drive_reauth_required"` の件数 | 1時間に5件超 | メール |
@@ -93,7 +93,7 @@ gcloud compute ssl-certificates describe weaponx-cert --global --format='value(m
 
 **対処:**
 1. Cloud SQL インスタンスが起動しているか(メンテナンス中でないか)確認
-2. 接続数が上限に近いなら、Cloud Run の最大インスタンス数と接続プール(1台5本)の掛け算が上限(約25)を超えていないか確かめる
+2. 接続数が上限に近いなら、Cloud Run の最大インスタンス数と接続プールの掛け算が DB の上限を超えていないか確かめる(`docs/02-01_system-design-doc.md` 7章「パフォーマンス」)
 3. `weaponx-database-url` のシークレットの値(接続名 `{PROJECT_ID}:asia-northeast1:weaponx-db`)と、Cloud Run の Cloud SQL 接続の設定を確かめる
 
 ```bash
@@ -235,11 +235,11 @@ gcloud logging read \
 | セキュリティの見直し | 月1回 | Cloud Armor の拒否のログ、ログイン失敗の件数を確認 |
 | 暗号化鍵の入れ替え | 年1回 | 下の「暗号化鍵の入れ替え」 |
 | OAuth クライアントシークレットの入れ替え | 年1回 | 3章「OAuth ログイン失敗」の手順でシークレットを追加し、古いシークレットを OAuth クライアントから消す |
-| IaC state確認 | 月1回 | `make tf-plan` で差分(手作業の変更)が無いか確認 |
-| 費用の確認 | 月1回 | 請求レポートで LB・Cloud SQL・Cloud Armor が想定(月 約 $40)に収まっているか |
+| IaC state確認 | 月1回 | ホストで `make tf-plan` を実行し、差分(手作業の変更)が無いか確認 |
+| 費用の確認 | 月1回 | 請求レポートで LB・Cloud SQL・Cloud Armor が想定(`docs/02-01_system-design-doc.md` 2章の概算)に収まっているか |
 | KPI の確認 | 月1回 | 下の「KPI の測り方」(`docs/01_prd.md` 5章) |
 
-古い Cloud Run のリビジョン、Artifact Registry のイメージ(最新20件を残す)、画面のビルドの保管(90日)は、自動で消える設定にしてある。
+古い Cloud Run のリビジョン、Artifact Registry のイメージ、画面のビルドの保管は、自動で消える設定にしてある(期間は `infra/`)。本番に出したバージョンは消えない(`docs/04_deployment-procedure.md` 5章)。
 
 ### 暗号化鍵の入れ替え
 
@@ -251,7 +251,8 @@ printf 'k2:%s,k1:%s' "$(openssl rand -base64 32)" '{今の k1 の値}' \
 ```
 
 2. Cloud Run の新しいリビジョンを出す(新しい暗号化は k2 で行われ、k1 の暗号文も読める)
-3. 全員がログインし直すか再連携するまで待つ(ログイン・再連携のたびに k2 で暗号化し直す)。`select count(*) from drive_connections where credentials like 'k1:%'` が0になったら、k1 を外したバージョンを作る
+3. API は、k1 で復号したトークンを k2 で暗号化し直して保存する(Drive を使うたび・ログインと再連携のたび。ADR-012)。`select count(*) from drive_connections where credentials like 'k1:%'` を週に1回見る
+4. 1か月たっても残る行(しばらく使っていない人)は、`update drive_connections set status = 'needs_reauth', updated_at = now() where credentials like 'k1:%';` で要再連携にする(次に使うとき再連携してもらう)。0件になったら、k1 を外したバージョンを作る
 
 ### KPI の測り方
 

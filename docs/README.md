@@ -48,13 +48,15 @@
 | 画面遷移 | `screen_flow.mermaid` |
 | デザインの方針(トーン・色の方向性・モード対応・密度) | `design-spec.md` 4.4 |
 | デザイントークンの具体値(色コード・フォントサイズ・余白 等) | `06_design-tokens.json` |
-| 背景・目的・ユーザーストーリー・KPI・スコープ外 | `01_prd.md`(スコープ外の詳細は `design-spec.md` 9章) |
+| 背景・目的・ターゲット・ユーザーストーリー・KPI、プロダクトとして持たないもの | `01_prd.md` |
+| 後で足すかもしれないもの(拡張候補)と既知の制約 | `design-spec.md` 9章 |
 | 技術スタックと判断理由(ADR)、ルーティング、API、データモデル、権限マトリクス、エラーコード、i18n の仕組み | `02-01_system-design-doc.md` |
-| 実行するコマンド | `Makefile`(ドキュメントはターゲット名だけを書く) |
-| 環境変数、開発環境、ブランチ戦略・コミットの規約 | `03_dev-setup.md` |
+| 実行するコマンド | `Makefile`(ドキュメントはターゲット名だけを書く。例外は `04`・`05` の運用手順の gcloud・terraform・SQL) |
+| 環境変数(ローカル)、開発環境、ブランチ戦略・コミットの規約 | `03_dev-setup.md` |
+| 本番の環境変数とその入れ場所、CI/CD のワークフロー | `04_deployment-procedure.md` |
 | インフラの構成(リソースの実体) | `infra/`(Terraform) |
 | デプロイ・ロールバックの手順 | `04_deployment-procedure.md` |
-| 監視・アラート・障害対応の手順 | `05_operation-runbook.md` |
+| ログの項目とレベル、監視・アラート・障害対応の手順 | `05_operation-runbook.md` |
 
 ## features/
 
