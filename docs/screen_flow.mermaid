@@ -1,20 +1,26 @@
 %% weaponx — 画面遷移図
 %% docs/design-spec.md の「3. 画面一覧」と対応する。
 %% 形の意味: [画面] / ([ダイアログ]) / [[外部(別タブ・Google の画面)]]
-%% ヘッダーのユーザーメニュー(連携設定・利用者管理・ログアウト)は全画面から開ける。図ではホームからの矢印で代表させる。
+%% 全画面共通(図では省略): ヘッダーのアプリ名 → ホーム、ユーザーメニュー → 連携設定・利用者管理・ログアウト、
+%%   要再連携の帯 → 連携設定、停止・セッション切れ → ログイン(6.0.2・6.0.7)。
+%%   図ではホームからの矢印で代表させる。
 
 graph TD
     %% === 共通 ===
     LOGIN["ログイン"]
+    ERROR["エラー<br/>ページが見つかりません / 問題が発生しました"]
     EXT_AUTH[["Google のログイン画面"]]
 
     LOGIN -->|"Google でログイン"| EXT_AUTH
-    EXT_AUTH -->|"許可済みのアカウント"| HOME
+    EXT_AUTH -->|"許可済みのアカウント<br/>(元の URL があればそこへ)"| HOME
     EXT_AUTH -->|"未許可・停止中・失敗"| LOGIN
+    LOGIN -->|"ログイン済みで開いた"| HOME
+    ERROR -->|"ホームへ(ログイン中)"| HOME
+    ERROR -->|"ログインへ(未ログイン)"| LOGIN
 
     %% === 一般ユーザー(管理者も使う) ===
     HOME["ホーム<br/>案件一覧・横断検索"]
-    CASE["案件<br/>資料一覧 + 右の横パネル"]
+    CASE["案件<br/>資料一覧 + 横パネル"]
     MEMBER["メンバー管理"]
     DRIVE["連携設定"]
 
@@ -25,6 +31,7 @@ graph TD
     DLG_EDIT(["登録内容を編集"])
     DLG_RENAME(["案件名を変更"])
     DLG_INVITE(["メンバーを招待"])
+    DLG_CONFIRM(["確認ダイアログ<br/>削除・外す・役割を下げる・連携の解除・停止"])
 
     EXT_OPEN[["資料の元の場所(別タブ)"]]
     EXT_EDITOR[["ドキュメント・スライドの編集画面(別タブ)"]]
@@ -38,32 +45,40 @@ graph TD
 
     CASE -->|"開く(行のアイコン・横パネル)"| EXT_OPEN
     CASE -->|"+ 資料を追加(編集者以上)"| DLG_ADD
-    DLG_ADD -->|"リンクで登録"| CASE
+    DLG_ADD -->|"追加・作成後(新しい行を選ぶ)"| CASE
     DLG_ADD -->|"新しく作る(連携あり)"| EXT_EDITOR
+    DLG_ADD -.->|"要再連携のとき「連携設定へ」"| DRIVE
     CASE -->|"新しい版を登録(編集者以上)"| DLG_VER
     DLG_VER -->|"登録"| CASE
     CASE -->|"これを元に作る / 新しい版を作る<br/>(編集者以上・連携あり)"| DLG_COPY
     DLG_COPY -->|"作成"| EXT_EDITOR
-    DLG_COPY -->|"作成後の案件画面"| CASE
+    DLG_COPY -->|"作成後は今の案件に戻る<br/>(別の案件は通知のリンクから)"| CASE
+    DLG_COPY -.->|"要再連携のとき「連携設定へ」"| DRIVE
     CASE -->|"登録内容を編集(編集者以上)"| DLG_EDIT
     DLG_EDIT -->|"保存"| CASE
     CASE -->|"案件名を変更(オーナー)"| DLG_RENAME
     DLG_RENAME -->|"保存"| CASE
     CASE -->|"他案件の参考資料・参考にした資料を選ぶ<br/>(参加している案件のみ)"| CASE
-    CASE -->|"案件を削除(オーナー)"| HOME
-    CASE -->|"← ホーム"| HOME
+    CASE -->|"この版を削除(編集者以上)<br/>案件を削除(オーナー)"| DLG_CONFIRM
+    DLG_CONFIRM -->|"版を削除した"| CASE
+    DLG_CONFIRM -->|"案件を削除した"| HOME
+    CASE -->|"← ホーム<br/>案件が見つからないときの「ホームへ」"| HOME
     CASE -->|"メンバー n人"| MEMBER
-    CASE -.->|"連携なしの人への案内"| DRIVE
+    CASE -.->|"未連携の人への案内<br/>(編集者以上)"| DRIVE
 
     MEMBER -->|"+ メンバーを招待(オーナー)"| DLG_INVITE
     DLG_INVITE -->|"招待"| MEMBER
-    MEMBER -->|"← 案件へ"| CASE
-    MEMBER -->|"自分を外す"| HOME
+    MEMBER -->|"外す・自分の役割を下げる(オーナー)"| DLG_CONFIRM
+    DLG_CONFIRM -->|"外した・役割を変えた"| MEMBER
+    DLG_CONFIRM -->|"自分を外した"| HOME
+    MEMBER -->|"← 案件名"| CASE
 
     HOME -->|"ユーザーメニュー: 連携設定"| DRIVE
-    DRIVE -->|"ドライブと連携する"| EXT_CONSENT
+    DRIVE -->|"ドライブと連携する / もう一度連携する"| EXT_CONSENT
     EXT_CONSENT -->|"許可・取り消し"| DRIVE
-    DRIVE -->|"ホームへ"| HOME
+    DRIVE -->|"連携を解除"| DLG_CONFIRM
+    DLG_CONFIRM -->|"解除した"| DRIVE
+    DRIVE -->|"ヘッダーのアプリ名"| HOME
 
     %% === 管理者 ===
     ADMIN["利用者管理"]
@@ -72,7 +87,9 @@ graph TD
     HOME -->|"ユーザーメニュー: 利用者管理<br/>(管理者のみ)"| ADMIN
     ADMIN -->|"+ 利用者を追加"| DLG_ADDUSER
     DLG_ADDUSER -->|"追加"| ADMIN
-    ADMIN -->|"ホームへ"| HOME
+    ADMIN -->|"停止"| DLG_CONFIRM
+    DLG_CONFIRM -->|"停止した"| ADMIN
+    ADMIN -->|"ヘッダーのアプリ名<br/>権限がないときの「ホームへ」"| HOME
 
-    %% === 全画面共通 ===
-    HOME -->|"ユーザーメニュー: ログアウト"| LOGIN
+    %% === 全画面共通(代表) ===
+    HOME -->|"ユーザーメニュー: ログアウト<br/>停止・セッション切れ"| LOGIN
