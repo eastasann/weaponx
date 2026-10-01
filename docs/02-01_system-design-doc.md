@@ -456,7 +456,8 @@ type ProjectRow = {
 
 **`POST /api/projects/:projectId/metadata-refresh`** → 200 `{ "updatedSeriesIds": ["..."] }`
 
-- design-spec 6.1「メタデータの取り直し」。表の最新版のうちドライブの資料(5.1)で、呼んだ人のアプリが使えるものだけを Drive から取り直す。10分以内に取得済みの版は飛ばす。同時に5件まで並べて呼ぶ。1回で最大300件
+- design-spec 6.1「メタデータの取り直し」。表の最新版のうちドライブの資料(5.1)で、呼んだ人のアプリが使えるものだけを Drive から取り直す。10分以内に取得済みの版は飛ばす。同時に5件まで並べて呼ぶ。1回で最大300件(更新日時の新しい順)。使えない版・一時的に失敗した版は保存済みの値のまま黙って飛ばす。取得の間にリンクが変わった・削除された版、取得を始めた後に別の呼び出しが取得を記録した版(その値のほうが新しい)は書かない。`metadata_fetched_at` には取得を始めた時刻を入れる。認可エラーなら 409 `DRIVE_REAUTH_REQUIRED`(それまでに取れた分は反映済み)
+- `updatedSeriesIds` は、資料名・種別・更新日時が変わった系列と、取得の記録が無かった版を取得済みにした系列(横パネルの編集の可否が変わる)
 - 要再連携なら 409 `DRIVE_REAUTH_REQUIRED`(画面の扱いは design-spec 6.1「状態ごとの表示」)
 
 **`GET /api/series/:seriesId?documentId={uuid}`** → 200(横パネル)
@@ -502,7 +503,8 @@ type ProjectRow = {
 
 → 201 `{ "series": SeriesRow, "document": Version, "editUrl": "https://docs.google.com/document/d/.../edit" }`
 
-- design-spec 6.0.8 の順(アプリの確認 → Drive で作成 → 登録)。`kind` は `google_doc` か `google_slides` だけ
+- design-spec 6.0.8 の順(アプリの確認 → Drive で作成 → 登録)。アプリの確認の順は、案件・系列・版の存在と役割(7章)、連携の状態(要再連携なら 409 `DRIVE_REAUTH_REQUIRED`)、入力の検証、追加先の案件(これを元に作る)、新しく選んだ参考資料の検証。入力の検証では、`sourceDocumentId`・`targetProjectId` が UUID でなければ 422 `VALIDATION_FAILED`(`fields.{項目} = invalid_format`)。`kind` は `google_doc` か `google_slides` だけ(それ以外は 422 `VALIDATION_FAILED`、`fields.kind = invalid_format`)
+- Drive の失敗は、認可エラーなら連携を要再連携にして 409 `DRIVE_REAUTH_REQUIRED`、それ以外は 502 `DRIVE_CREATE_FAILED`(3つの作成系のエンドポイントで共通。コピーは元のファイルをアプリが使えない・見つからないとき 422 `DRIVE_SOURCE_UNAVAILABLE`)。Drive には作れたが登録に失敗したら、500・404・403 のいずれかの `DRIVE_CREATED_NOT_REGISTERED`(8章)を返し、作ったファイルは消さない。このとき登録の書き込みはすべて取り消され、版番号も使わない
 - 作成・コピーした版は、Drive の応答の資料名と更新日時で登録し、`metadata_fetched_at` を入れる(資料名は読み取り専用になる。design-spec 6.5.6)。3つの作成系のエンドポイントで共通
 
 **`POST /api/series/:seriesId/versions`**(編集者以上。新しい版を登録)
@@ -532,6 +534,7 @@ type ProjectRow = {
 → 201 `{ "series": SeriesRow, "document": Version, "editUrl": "..." }`
 
 - 参考資料・タグの扱いと版番号は design-spec 6.3・6.0.6 のとおり(参考資料は処理した時点の系列の最新版から引き継ぐ)
+- `sourceDocumentId` は、この系列の削除されていない版でなければ 404 `DOCUMENT_NOT_FOUND`(`seriesExists: true`)。ドキュメント・スライドでない版・ファイル ID を持たない版は 422 `VALIDATION_FAILED`(`fields.sourceDocumentId = invalid_format`)
 
 **`POST /api/documents/:documentId/copies`**(コピー元の案件で編集者以上、かつ追加先で編集者以上。これを元に作る)
 
@@ -541,7 +544,7 @@ type ProjectRow = {
 
 → 201 `{ "projectId": "<追加先>", "series": SeriesRow, "document": Version, "editUrl": "..." }`
 
-- 参考資料にコピー元の版を記録する。追加先が削除された・編集者より下になった → 422 `TARGET_PROJECT_UNAVAILABLE`(design-spec 6.0.8)
+- 参考資料にコピー元の版を記録する。追加先が存在しない・削除された・不参加・編集者より下になった → 422 `TARGET_PROJECT_UNAVAILABLE`(design-spec 6.0.8)。コピー元がドキュメント・スライドでない版・ファイル ID を持たない版なら 422 `VALIDATION_FAILED`(`fields.documentId = invalid_format`)
 
 **`PATCH /api/documents/:documentId`**(編集者以上。登録内容を編集)
 
@@ -610,11 +613,11 @@ type ProjectRow = {
 
 **`GET /api/documents/:documentId/drive-access`** → 200 `{ "accessible": true, "fileId": "1AbC..." }`
 
-- 作成ダイアログを開いた時点の確認(design-spec 6.3)。ドキュメント・スライドでない版は 422 `VALIDATION_FAILED`
+- 作成ダイアログを開いた時点の確認(design-spec 6.3)。ドキュメント・スライドでない版(ファイル ID が無い版を含む)は 422 `VALIDATION_FAILED`(`fields.documentId = invalid_format`)。アプリがまだ使えない・見る権限が無いときは失敗にせず `{ "accessible": false, "fileId": "..." }` を返す。要再連携は 409 `DRIVE_REAUTH_REQUIRED`、Drive の一時的な失敗は 503 `SERVICE_UNAVAILABLE`
 
 **`POST /api/drive/picker-token`** → 200 `{ "accessToken": "ya29...", "expiresAt": "2026-09-30T04:10:00Z" }`
 
-- Google Picker 用の短命のアクセストークン(範囲は `drive.file` だけ)。画面はメモリにだけ持ち、保存しない(7章)。要再連携なら 409 `DRIVE_REAUTH_REQUIRED`
+- Google Picker 用の短命のアクセストークン(範囲は `drive.file` だけ)。画面はメモリにだけ持ち、保存しない(7章)。応答に `Cache-Control: no-store` を付ける。要再連携なら 409 `DRIVE_REAUTH_REQUIRED`、Drive の一時的な失敗は 503 `SERVICE_UNAVAILABLE`
 
 ### 5.8 メンバー
 
@@ -671,7 +674,7 @@ type ProjectRow = {
 | `POST /api/client-errors` | 不要 | 画面の想定外のエラーを送る(ログイン画面・エラー画面からも送れるように認証を求めない。セッションがあれば利用者 ID を記録する)。本文 `{ "message": string, "stack"?: string, "path": string }`。204。記録するときは `path` から検索パラメーターを落として500文字、`message` は500文字、`stack` は4000文字で切る(7章「ログ」) |
 | `GET /api/dev/users` | 不要 | 開発用ログインの利用者一覧。一度でもログインした(Google アカウントの ID がある)利用者だけを返す(未ログインの利用者は、ドライブ連携の記録が無いので選べない)。停止中の利用者も含める。200 `{ "users": [ { "id", "email", "displayName", "globalRole", "status" } ] }`(メール順)。`DEV_LOGIN_ENABLED=true` のときだけルートを登録する |
 | `POST /api/dev/login` | 不要 | 本文 `{ "email": "yamada@example.com" }` → 204。セッションを作る。`drive_connections` は更新しない(design-spec 8章)。停止中の利用者は本物のログインと同じく `wx_login_notice`(`suspended`)を入れて 401 `ACCOUNT_SUSPENDED`。ログインしたことがない利用者(Google アカウントの ID が無い)・登録されていないメール・形式が違うメールは 404 `NOT_FOUND`。最終ログインは更新する。`DEV_LOGIN_ENABLED=true` のときだけルートを登録する |
-| `POST /api/dev/drive/grant` | 要 | 本文 `{ "fileId": "..." }` → 204。ドライブの模擬で、そのファイルを呼んだ利用者の「アプリが使えるファイル」にする(模擬のファイル選択画面で選んだときに画面が呼ぶ。design-spec 8章)。`DRIVE_MODE=mock` のときだけルートを登録する |
+| `POST /api/dev/drive/grant` | 要 | 本文 `{ "fileId": "..." }` → 204。ドライブの模擬で、そのファイルを呼んだ利用者の「アプリが使えるファイル」にする(模擬のファイル選択画面で選んだときに画面が呼ぶ。design-spec 8章)。`fileId` の形式が違えば 422 `VALIDATION_FAILED`、取得済みの版が1つも無いファイルは 404 `NOT_FOUND`。`DRIVE_MODE=mock` のときだけルートを登録する |
 
 `NODE_ENV=production` で `DEV_LOGIN_ENABLED=true` または `DRIVE_MODE=mock` なら、API は起動しない(誤って本番で開発用ログインや模擬を開けないため)。
 
@@ -1021,7 +1024,7 @@ export const documentTags = pgTable(
 - ✕(未認証)は 401 `UNAUTHENTICATED`。停止中の利用者のセッションで来たリクエストは、どれも 401 `ACCOUNT_SUSPENDED` を返し、そのセッションを消し、Cookie `wx_login_notice` に `{ "code": "suspended" }` を入れる(ログイン画面が停止の表示を出す。design-spec 6.0.2)
 - 不参加・削除済みの案件は 404 `PROJECT_NOT_FOUND`(403 にしない。案件があるかどうかを漏らさない。design-spec 6.0.2「理由は区別しない」)
 - 系列・版の ID で呼ぶエンドポイントは、その系列の案件で上の表を当てる。判定の順: 系列・版が存在しない → 404 `DOCUMENT_NOT_FOUND`。存在するがその案件に参加していない・案件が削除済み → 404 `PROJECT_NOT_FOUND`。参加しているが系列・版が削除済み → 404 `DOCUMENT_NOT_FOUND`。役割が足りない → 403 `ROLE_INSUFFICIENT`
-- 判定の順は、認証(401)、案件・系列の存在と参加(404)、役割(403)、入力の検証(422)。本文とクエリの型の不一致(必須項目の欠落、型違い)は Elysia のスキーマ検証が認可より先に拾うので 422 になりうる(案件があるかどうかは漏れない)
+- 判定の順は、認証(401)、案件・系列の存在と参加(404)、役割(403)、入力の検証(422)。ドライブを使う操作は、役割の後、入力の検証の前に連携の状態を確かめる(要再連携は 409 `DRIVE_REAUTH_REQUIRED`)。本文とクエリの型の不一致(必須項目の欠落、型違い)は Elysia のスキーマ検証が認可より先に拾うので 422 になりうる(案件があるかどうかは漏れない)
 - 参考資料・参考にした資料(`RelatedItem`)で `no_access`・`deleted` の行は、名前・案件名・版番号・ID を返さない
 - 参考資料として新しく選べるのは、参加している、削除されていない案件の、削除されていない版だけ(`REFERENCE_UNAVAILABLE`)
 
@@ -1108,13 +1111,13 @@ export const documentTags = pgTable(
 | `DRIVE_REAUTH_REQUIRED` | 409 | 要再連携 | — | Google の認可エラー(design-spec 6.0.5 の定義) |
 | `DRIVE_FILE_NOT_ACCESSIBLE` | 422 | (失敗として扱わない。design-spec 6.0.9) | `{ fileId }` | アプリがまだ使えない・見る権限が無い |
 | `DRIVE_SOURCE_UNAVAILABLE` | 422 | 入力の問題 | — | コピー元が見つからない・開けない(design-spec 6.3) |
-| `DRIVE_CREATE_FAILED` | 502 | 通信・その他 | — | Drive での作成・コピーに失敗(design-spec 6.0.8) |
+| `DRIVE_CREATE_FAILED` | 502 | 通信・その他 | — | Drive での作成・コピーに失敗。レート制限・5xx を含む(design-spec 6.0.8) |
 | `DRIVE_CREATED_NOT_REGISTERED` | 500 / 404 / 403 | 6.0.8 | `{ file: { fileId, url }, cause: "internal" \| "not_found" \| "forbidden", causeCode: string }` | Drive には作れたが登録に失敗。画面の扱いは design-spec 6.0.8(`cause` が `internal` のときが「通信・その他の失敗」) |
 | `RATE_LIMITED` | 429 | 通信・その他 | — | Cloud Armor(本文は JSON でない。上の例外) |
 | `INTERNAL` | 500 | 通信・その他 | — | 想定外の例外 |
 | `SERVICE_UNAVAILABLE` | 503 | 通信・その他 | — | DB・Google に一時的につながらない |
 
-- Google の Drive API の応答の分け方: 401、`invalid_grant`(リフレッシュ時)、範囲不足の 403 → `drive_connections.status` を `needs_reauth` にし、`DRIVE_REAUTH_REQUIRED` を返す。ただし、5.5 の登録系(リンクでの登録、新しい版の登録、登録内容の編集でリンクを変えたとき)の中での取り直しでは、エラーを返さずに登録を成功させ、状態だけを `driveStatus` で返す。ファイル単位の 404・403(`insufficientFilePermissions` 等)→ `DRIVE_FILE_NOT_ACCESSIBLE` / `DRIVE_SOURCE_UNAVAILABLE`。レート制限(`rateLimitExceeded`・`userRateLimitExceeded`)・5xx → 1回だけ待って再試行し、だめなら `SERVICE_UNAVAILABLE`(要再連携にしない)
+- Google の Drive API の応答の分け方: 401、`invalid_grant`(リフレッシュ時)、範囲不足の 403 → `drive_connections.status` を `needs_reauth` にし、`DRIVE_REAUTH_REQUIRED` を返す。ただし、5.5 の登録系(リンクでの登録、新しい版の登録、登録内容の編集でリンクを変えたとき)の中での取り直しでは、エラーを返さずに登録を成功させ、状態だけを `driveStatus` で返す。ファイル単位の 404・403(`insufficientFilePermissions` 等)→ `DRIVE_FILE_NOT_ACCESSIBLE` / `DRIVE_SOURCE_UNAVAILABLE`。レート制限(`rateLimitExceeded`・`userRateLimitExceeded`)・5xx → 1回だけ待って再試行し、だめなら `SERVICE_UNAVAILABLE`(要再連携にしない)。ただし作成・コピー(5.5)の失敗は、認可エラーとコピー元の `DRIVE_SOURCE_UNAVAILABLE` を除き、502 `DRIVE_CREATE_FAILED` にする
 - 同じ結果になる操作(停止済みの人の停止など。design-spec 6.0.6)は 200 で成功を返す
 
 ### フロントエンドでの表示方針

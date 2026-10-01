@@ -35,6 +35,8 @@ export type AppErrorOptions = {
   details?: Record<string, unknown>;
   /** 応答に付ける Set-Cookie(停止の通知のように、エラーと一緒に Cookie を返す場面) */
   cookies?: string[];
+  /** コードの既定のステータスを上書きする(`DRIVE_CREATED_NOT_REGISTERED` は原因で 500 / 404 / 403) */
+  status?: number;
   cause?: unknown;
 };
 
@@ -49,7 +51,7 @@ export class AppError extends Error {
     options: AppErrorOptions = {},
   ) {
     super(MESSAGES[code], { cause: options.cause });
-    this.status = errorStatus(code);
+    this.status = options.status ?? errorStatus(code);
     this.details = options.details;
     this.cookies = options.cookies ?? [];
   }

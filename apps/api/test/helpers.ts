@@ -37,7 +37,8 @@ export type TestContext = ReturnType<typeof createTestContext>;
 /** 結合テストの土台。API は HTTP を経由せず `app.handle` で呼ぶ(URL のホストは localhost にする) */
 export function createTestContext(
   overrides: Record<string, string> = {},
-  options: { drive?: (mock: MockDrive) => Drive } = {},
+  /** `drive` で差し替えるメソッドだけ上書きし、残りは模擬のまま使う */
+  options: { drive?: (mock: MockDrive) => Partial<Drive> } = {},
 ) {
   const config = testConfig(overrides);
   const { db, sql } = createDb(url as string);
@@ -48,7 +49,8 @@ export function createTestContext(
     write: (line) => logs.push(JSON.parse(line)),
   });
   const mockDrive = createMockDrive(db);
-  const app = createApp({ config, db, logger, drive: options.drive?.(mockDrive) ?? mockDrive });
+  const drive: Drive = { ...mockDrive, ...options.drive?.(mockDrive) };
+  const app = createApp({ config, db, logger, drive });
 
   async function call(
     method: string,

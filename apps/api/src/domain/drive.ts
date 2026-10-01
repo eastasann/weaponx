@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import * as t from "../db/schema";
 import { DriveError, type DriveFile } from "../drive";
 import type { AppDeps } from "../lib/deps";
-import { AppError } from "../lib/errors";
+import { AppError, validationFailed } from "../lib/errors";
 import type { DbOrTx } from "./projects";
 
 export type DriveStatus = "active" | "needs_reauth";
@@ -23,6 +23,23 @@ async function markNeedsReauth(db: DbOrTx, userId: string): Promise<void> {
     .where(eq(t.driveConnections.userId, userId));
 }
 
+/** Drive の認可エラーを受けたとき、連携を要再連携にして返す `DRIVE_REAUTH_REQUIRED`(02-01 8章) */
+export async function reauthRequired(
+  db: DbOrTx,
+  userId: string,
+  cause: DriveError,
+): Promise<AppError> {
+  await markNeedsReauth(db, userId);
+  return new AppError("DRIVE_REAUTH_REQUIRED", { cause });
+}
+
+/** ドライブを使う処理の最初の確認。要再連携の人には Google を呼ばない(design-spec 6.0.5) */
+export async function requireActiveDrive(db: DbOrTx, userId: string): Promise<void> {
+  if ((await driveStatusOf(db, userId)) === "needs_reauth") {
+    throw new AppError("DRIVE_REAUTH_REQUIRED");
+  }
+}
+
 /**
  * ドライブのファイルの情報を取り、失敗は 02-01 8章のエラーにする。
  * 要再連携の人には Google を呼ばない。認可エラーなら連携の状態を要再連携に切り替える。
@@ -32,17 +49,12 @@ export async function getDriveFile(
   userId: string,
   fileId: string,
 ): Promise<DriveFile> {
-  if ((await driveStatusOf(db, userId)) === "needs_reauth") {
-    throw new AppError("DRIVE_REAUTH_REQUIRED");
-  }
+  await requireActiveDrive(db, userId);
   try {
     return await drive.getFile(userId, fileId);
   } catch (error) {
     if (!(error instanceof DriveError)) throw error;
-    if (error.reason === "reauth") {
-      await markNeedsReauth(db, userId);
-      throw new AppError("DRIVE_REAUTH_REQUIRED", { cause: error });
-    }
+    if (error.reason === "reauth") throw await reauthRequired(db, userId, error);
     if (error.reason === "not_accessible") {
       throw new AppError("DRIVE_FILE_NOT_ACCESSIBLE", { details: { fileId }, cause: error });
     }
@@ -70,4 +82,56 @@ export async function tryGetDriveFile(
     }
     throw error;
   }
+}
+
+/** 作成ダイアログを開いた時点の確認(02-01 5.7)。まだ使えないことは失敗にせず `accessible: false` で返す */
+async function checkDriveAccess(
+  deps: Pick<AppDeps, "db" | "drive">,
+  userId: string,
+  fileId: string,
+): Promise<{ accessible: boolean; fileId: string }> {
+  try {
+    await getDriveFile(deps, userId, fileId);
+    return { accessible: true, fileId };
+  } catch (error) {
+    if (error instanceof AppError && error.code === "DRIVE_FILE_NOT_ACCESSIBLE") {
+      return { accessible: false, fileId };
+    }
+    throw error;
+  }
+}
+
+/** Google Picker 用の短命のトークン(02-01 5.7)。要再連携の人には Google を呼ばない */
+export async function issuePickerToken(
+  { db, drive }: Pick<AppDeps, "db" | "drive">,
+  userId: string,
+): Promise<{ accessToken: string; expiresAt: string }> {
+  await requireActiveDrive(db, userId);
+  try {
+    const token = await drive.issuePickerToken(userId);
+    return { accessToken: token.accessToken, expiresAt: token.expiresAt.toISOString() };
+  } catch (error) {
+    if (!(error instanceof DriveError)) throw error;
+    if (error.reason === "reauth") throw await reauthRequired(db, userId, error);
+    throw new AppError("SERVICE_UNAVAILABLE", { cause: error });
+  }
+}
+
+/**
+ * 版のファイルをアプリが使えるか(`GET /api/documents/:documentId/drive-access`)。
+ * ドキュメント・スライドでない版(ファイル ID が無い版を含む)は `VALIDATION_FAILED`。
+ */
+export async function documentDriveAccess(
+  deps: Pick<AppDeps, "db" | "drive">,
+  userId: string,
+  documentId: string,
+): Promise<{ accessible: boolean; fileId: string }> {
+  const [doc] = await deps.db
+    .select({ kind: t.documents.kind, googleFileId: t.documents.googleFileId })
+    .from(t.documents)
+    .where(eq(t.documents.id, documentId));
+  if (!doc?.googleFileId || (doc.kind !== "google_doc" && doc.kind !== "google_slides")) {
+    throw validationFailed({ documentId: "invalid_format" });
+  }
+  return checkDriveAccess(deps, userId, doc.googleFileId);
 }

@@ -194,7 +194,7 @@ Google の本物(Step 6)、画面(Step 7〜)。
 
 ## Step 5: ドライブでの作成とコピーの API + メタデータの取り直し
 
-Status:
+Status: done 2026-10-01
 
 ```
 docs/02-01_system-design-doc.md の 5.5(documents/new・versions/copy・copies・metadata-refresh)・5.7(drive-access・picker-token)・5.10(dev/drive/grant)、8章と、

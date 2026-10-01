@@ -78,12 +78,14 @@ function fromSchemaError(error: { all?: ValidationIssue[] }): AppError {
  * ログに出す例外の文字列。Drizzle のエラーは本文にクエリのパラメーター(資料名やリンク)を含むので、
  * 元になった DB のエラーだけを出す。
  */
-function safeStack(error: unknown): string | undefined {
-  if (!(error instanceof Error)) return undefined;
+function safeStack(error: unknown, depth = 0): string | undefined {
+  if (!(error instanceof Error) || depth > 3) return undefined;
   if (error.constructor.name === "DrizzleQueryError" && error.cause instanceof Error) {
     return error.cause.stack;
   }
-  return error.stack;
+  // `DRIVE_CREATED_NOT_REGISTERED` のように別のエラーを包んだときは、原因も残す
+  const cause = safeStack(error.cause, depth + 1);
+  return cause ? `${error.stack}\nCaused by: ${cause}` : error.stack;
 }
 
 function toAppError(error: unknown, code: string | number): AppError {

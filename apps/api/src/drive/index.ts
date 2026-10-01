@@ -3,7 +3,7 @@ import type { Config } from "../lib/config";
 import { createMockDrive } from "./mock";
 import type { Drive } from "./types";
 
-export { createMockDrive, type MockDrive } from "./mock";
+export { createMockDrive, isMockDrive, type MockDrive } from "./mock";
 export * from "./types";
 
 /**

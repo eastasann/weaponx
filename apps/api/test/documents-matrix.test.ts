@@ -108,6 +108,46 @@ const rows: Row[] = [
     expect: { anon: 401, outsider: 200, viewer: 200, editor: 200, owner: 200 },
   },
   {
+    label: "コピー元の使える確認",
+    method: "GET",
+    path: (i) => `/api/documents/${i.document}/drive-access`,
+    expect: write(200),
+  },
+  {
+    label: "新しく作る",
+    method: "POST",
+    path: (i) => `/api/projects/${i.project}/documents/new`,
+    body: () => ({ kind: "google_doc", name: "新規" }),
+    expect: write(201),
+  },
+  {
+    label: "新しい版を作る",
+    method: "POST",
+    path: (i) => `/api/series/${i.series}/versions/copy`,
+    body: (i) => ({ sourceDocumentId: i.document, name: "コピー" }),
+    expect: write(201),
+  },
+  {
+    label: "これを元に作る",
+    method: "POST",
+    path: (i) => `/api/documents/${i.document}/copies`,
+    body: (i) => ({ targetProjectId: i.project, name: "コピー" }),
+    expect: write(201),
+  },
+  {
+    // 閲覧者以上。Drive を使うので、要再連携の人(閲覧者の田中)は 409
+    label: "メタデータの取り直し",
+    method: "POST",
+    path: (i) => `/api/projects/${i.project}/metadata-refresh`,
+    expect: { anon: 401, outsider: 404, viewer: 409, editor: 200, owner: 200 },
+  },
+  {
+    label: "Picker 用トークン",
+    method: "POST",
+    path: () => "/api/drive/picker-token",
+    expect: { anon: 401, outsider: 409, viewer: 409, editor: 200, owner: 200 },
+  },
+  {
     // 案件の役割は関係なく、呼んだ人自身のドライブ連携で決まる: 佐藤は登録した人なので 200、
     // 山田はまだ使えないので 422、連携が要再連携(田中)・連携の記録が無い人(新規)は 409
     label: "ドライブの情報取得",
@@ -129,6 +169,10 @@ describe("資料のエンドポイントの権限マトリクス", () => {
           document: await ctx.documentId("提案書 v2"),
           reference: await ctx.documentId("調査レポート"),
         };
+        // 作成系の行がコピー元を使えるように、版を登録した山田のほか佐藤にも選んでもらった状態にする
+        for (const email of [USERS.yamada, USERS.sato]) {
+          ctx.mockDrive.grant(await ctx.userId(email), "seed-proposal-v2");
+        }
         const reply = await ctx.call(row.method, row.path(ids), { cookie, body: row.body?.(ids) });
         expect(reply.status).toBe(status);
         if (status === 404) expect(reply.json.error.code).toBe("PROJECT_NOT_FOUND");
@@ -166,6 +210,36 @@ describe("資料のエンドポイントの権限マトリクス", () => {
         { tags: ["a", "b", "c", "d", "e", "f"] },
       ],
       ["GET", `/api/projects/${project}/tags?q=${"あ".repeat(101)}`, outsider, 404],
+      ["POST", `/api/projects/${project}/documents/new`, outsider, 404, { kind: "x", name: "" }],
+      ["POST", `/api/projects/${project}/documents/new`, viewer, 403, { kind: "x", name: "" }],
+      [
+        "POST",
+        `/api/series/${series}/versions/copy`,
+        outsider,
+        404,
+        { sourceDocumentId: "x", name: "" },
+      ],
+      [
+        "POST",
+        `/api/series/${series}/versions/copy`,
+        viewer,
+        403,
+        { sourceDocumentId: "x", name: "" },
+      ],
+      [
+        "POST",
+        `/api/documents/${document}/copies`,
+        outsider,
+        404,
+        { targetProjectId: "x", name: "" },
+      ],
+      [
+        "POST",
+        `/api/documents/${document}/copies`,
+        viewer,
+        403,
+        { targetProjectId: "x", name: "" },
+      ],
     ];
     for (const [method, path, cookie, status, body] of cases) {
       const reply = await ctx.call(method, path, { cookie, body });

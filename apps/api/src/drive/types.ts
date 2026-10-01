@@ -34,7 +34,21 @@ export class DriveError extends Error {
 export interface Drive {
   /** `userId` のアプリが使えるファイルの情報を返す。失敗は `DriveError` */
   getFile(userId: string, fileId: string): Promise<DriveFile>;
+  /** `userId` のマイドライブ直下に空のドキュメント・スライドを作る。失敗は `DriveError` */
+  createFile(userId: string, kind: CreatableKind, name: string): Promise<DriveFile>;
+  /**
+   * `sourceFileId` を `userId` のマイドライブ直下にコピーする。元のファイルをアプリが使えない・
+   * 見つからないときは `not_accessible`。失敗は `DriveError`
+   */
+  copyFile(userId: string, sourceFileId: string, name: string): Promise<DriveFile>;
+  /** Picker 用の短命のアクセストークン(範囲は `drive.file` だけ)。失敗は `DriveError` */
+  issuePickerToken(userId: string): Promise<PickerToken>;
 }
+
+/** アプリが Drive で新しく作れる種別(design-spec 6.2) */
+export type CreatableKind = Extract<DocumentKind, "google_doc" | "google_slides">;
+
+export type PickerToken = { accessToken: string; expiresAt: Date };
 
 /** Google の形式でファイルを開く URL。ドキュメント・スライド・スプレッドシート以外は drive.google.com */
 export function driveFileUrl(fileId: string, kind: DocumentKind): string {

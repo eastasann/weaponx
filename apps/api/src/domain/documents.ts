@@ -34,7 +34,7 @@ type Deps = Pick<AppDeps, "db" | "drive">;
 export type DocumentResult = { series: SeriesRow; document: Version; driveStatus: DriveStatus };
 
 /** 参考資料の ID の並び。形式の不備は `invalid_format`、重複は1つにまとめ、件数は上限を超えれば `too_many` */
-function readReferenceIds(fields: FieldCollector, raw: readonly string[]): string[] {
+export function readReferenceIds(fields: FieldCollector, raw: readonly string[]): string[] {
   if (raw.some((id) => !isUuid(id))) {
     fields.reject("referenceIds", "invalid_format");
     return [];
@@ -45,7 +45,10 @@ function readReferenceIds(fields: FieldCollector, raw: readonly string[]): strin
 }
 
 /** 変更メモ。空は「なし」(null) */
-function readChangeNote(fields: FieldCollector, raw: string | null | undefined): string | null {
+export function readChangeNote(
+  fields: FieldCollector,
+  raw: string | null | undefined,
+): string | null {
   const note = fields.text("changeNote", raw ?? "", { max: LIMITS.changeNote, required: false });
   return note === "" ? null : note;
 }
@@ -187,7 +190,7 @@ async function withDuplicateLink<T>(
  * 新しく選んだ参考資料の検証(design-spec 6.0.3)。参加している、削除されていない案件の、
  * 削除されていない版で、`seriesId` の系列の版でないこと。違反した ID は `details.documentIds` に返す。
  */
-async function assertReferencesAvailable(
+export async function assertReferencesAvailable(
   tx: DbOrTx,
   userId: string,
   ids: string[],
@@ -217,7 +220,7 @@ async function assertReferencesAvailable(
   }
 }
 
-async function referenceIdsOf(tx: DbOrTx, documentId: string): Promise<string[]> {
+export async function referenceIdsOf(tx: DbOrTx, documentId: string): Promise<string[]> {
   const rows = await tx
     .select({ id: t.documentReferences.referencedDocumentId })
     .from(t.documentReferences)
@@ -225,7 +228,12 @@ async function referenceIdsOf(tx: DbOrTx, documentId: string): Promise<string[]>
   return rows.map((r) => r.id);
 }
 
-async function insertReferences(tx: DbOrTx, userId: string, documentId: string, ids: string[]) {
+export async function insertReferences(
+  tx: DbOrTx,
+  userId: string,
+  documentId: string,
+  ids: string[],
+) {
   if (ids.length === 0) return;
   await tx
     .insert(t.documentReferences)
@@ -235,7 +243,7 @@ async function insertReferences(tx: DbOrTx, userId: string, documentId: string, 
 }
 
 /** 案件の最終更新(02-01 6章)。ほかの書き込みが終わってから、トランザクションの最後に行う */
-async function touchProject(tx: DbOrTx, projectId: string): Promise<void> {
+export async function touchProject(tx: DbOrTx, projectId: string): Promise<void> {
   await tx
     .update(t.projects)
     .set({ lastActivityAt: new Date() })

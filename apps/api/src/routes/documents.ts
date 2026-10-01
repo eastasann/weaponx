@@ -1,12 +1,16 @@
 import { LIMITS } from "@weaponx/shared";
 import { Elysia, t } from "elysia";
 import { authenticated } from "../auth/session";
+import { requireDocumentAccess } from "../domain/access";
 import {
   deleteDocument,
   registerDocument,
   registerVersion,
   updateDocument,
 } from "../domain/documents";
+import { documentDriveAccess } from "../domain/drive";
+import { copyDocument, copyVersion, createDocument } from "../domain/drive-create";
+import { refreshMetadata } from "../domain/metadata";
 import { requireProjectRole } from "../domain/projects";
 import { listReferenceCandidates, listTagCandidates, searchDocuments } from "../domain/search";
 import { getSeriesDetail, listSeriesRows } from "../domain/series";
@@ -38,6 +42,17 @@ const VersionBody = t.Composite([
   RegisterBody,
   t.Object({ changeNote: t.Optional(Nullable(t.String())) }),
 ]);
+const NewDocumentBody = t.Object({
+  kind: t.String(),
+  name: t.String(),
+  referenceIds: t.Optional(t.Array(t.String())),
+});
+const CopyVersionBody = t.Object({
+  sourceDocumentId: t.String(),
+  name: t.String(),
+  changeNote: t.Optional(Nullable(t.String())),
+});
+const CopyDocumentBody = t.Object({ targetProjectId: t.String(), name: t.String() });
 const UpdateBody = t.Object({
   url: t.Optional(t.String()),
   kind: t.Optional(Kind),
@@ -93,6 +108,20 @@ export function documentRoutes(deps: AppDeps) {
       },
       { params: ProjectParams, body: RegisterBody },
     )
+    .post(
+      "/projects/:projectId/documents/new",
+      async ({ auth, params, body, set }) => {
+        const result = await createDocument(deps, auth.user.id, params.projectId, body);
+        set.status = 201;
+        return result;
+      },
+      { params: ProjectParams, body: NewDocumentBody },
+    )
+    .post(
+      "/projects/:projectId/metadata-refresh",
+      async ({ auth, params }) => refreshMetadata(deps, auth.user.id, params.projectId),
+      { params: ProjectParams },
+    )
     .get(
       "/series/:seriesId",
       async ({ auth, params, query }) =>
@@ -107,6 +136,32 @@ export function documentRoutes(deps: AppDeps) {
         return result;
       },
       { params: SeriesParams, body: VersionBody },
+    )
+    .post(
+      "/series/:seriesId/versions/copy",
+      async ({ auth, params, body, set }) => {
+        const result = await copyVersion(deps, auth.user.id, params.seriesId, body);
+        set.status = 201;
+        return result;
+      },
+      { params: SeriesParams, body: CopyVersionBody },
+    )
+    .post(
+      "/documents/:documentId/copies",
+      async ({ auth, params, body, set }) => {
+        const result = await copyDocument(deps, auth.user.id, params.documentId, body);
+        set.status = 201;
+        return result;
+      },
+      { params: DocumentParams, body: CopyDocumentBody },
+    )
+    .get(
+      "/documents/:documentId/drive-access",
+      async ({ auth, params }) => {
+        const access = await requireDocumentAccess(db, auth.user.id, params.documentId, "editor");
+        return documentDriveAccess(deps, auth.user.id, access.documentId);
+      },
+      { params: DocumentParams },
     )
     .patch(
       "/documents/:documentId",
