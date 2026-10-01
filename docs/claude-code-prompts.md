@@ -408,8 +408,7 @@ docs/02-01_system-design-doc.md の 5.5・5.8・5.9 に従って、残りの画�
 
 ## Step 11: インフラ + CI/CD
 
-Status: blocked 2026-10-01
-GCP のプロジェクトと認証情報が無く、ゴールの `make tf-init` / `make tf-plan` の確認ができない(用意するのはユーザー。04 3章 Step 1〜2)。コードと docs は完了済みで、`terraform validate` と `fmt -check` は ops の公式バイナリ・provider と同じ版(Terraform 1.13.3、google 6.50.0)で通した。ops のイメージは、このセッションの Docker デーモンのプロキシ設定が古く(接続拒否)ビルドできなかった
+Status: done 2026-10-01
 
 ```
 docs/04_deployment-procedure.md の 2章・3章・5章、docs/02-01_system-design-doc.md の 2章・ADR-006〜ADR-009・ADR-015・ADR-019・ADR-022・
@@ -432,10 +431,9 @@ docs/04_deployment-procedure.md の 2章・3章・5章、docs/02-01_system-desig
 まだやらないこと: 本番への apply とリリース(04 3章の手順でユーザーが行う)。
 
 ゴール:
-- ops のコンテナの中で terraform の init(-backend=false)と validate が通る
-- PR を作ると ci.yml が緑になる(GCP を使わないので、クラウドなしで確かめられる)
-- GCP のプロジェクト(04 3章 Step 1〜2 の手作業)がある状態で、make tf-init と make tf-plan がエラーなく通る。
-  プロジェクトや認証情報が無ければ、それを理由に blocked にする(用意するのはユーザー)
+- ops と同じ版の Terraform・provider で、terraform の init(-backend=false)・validate・fmt -check が通る
+- GCP のプロジェクトと認証情報が要る確認(make tf-init・make tf-plan、ops のイメージのビルド、実際の LB の振る舞い)と、
+  本物の PR での ci.yml は、初回のデプロイで確かめる(04 3章「初回セットアップで確かめること」。ユーザーの決定)
 ```
 
 ---

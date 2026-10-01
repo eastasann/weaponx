@@ -246,6 +246,16 @@ gcloud run jobs execute weaponx-migrate --region=asia-northeast1 --wait \
 
 4. https://{DOMAIN} を開き、そのメールの Google アカウントでログインする。以降の利用者は利用者管理(A1)から追加する
 
+### 初回セットアップで確かめること
+
+実装のときは GCP のプロジェクトも本物の PR も無く、次の項目を確かめていない。初回のセットアップの中で確かめ、通らなければ直してから先へ進む。
+
+- [ ] Step 1: `make ops-login` で ops のイメージがビルドでき、gcloud にログインできる
+- [ ] Step 3・Step 5: `make tf-init` と `make tf-plan` がエラーなく通り、plan の内容が「Terraform が作成するリソース」の表と合っている
+- [ ] Step 6 の後: 最初の PR で `ci.yml` が緑になる
+- [ ] Step 7 の後: `https://{DOMAIN}/projects/x` が 200 で画面を返し(SPA のフォールバック)、`https://{DOMAIN}/api/no-such-path` が JSON の 404 のまま返る(`index.html` に置き換わらない)
+- [ ] Step 7 の後: 6章の手動の確認(本物の Google でのログイン・Picker・作成・コピー)
+
 ## 4. リリース前チェックリスト
 
 - [ ] 全テスト通過(CI緑。E2E を含む)
