@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { countGraphemes, validateEmail, validateSingleLine } from "./validation";
+import {
+  countGraphemes,
+  validateEmail,
+  validateSingleLine,
+  validateSourceModifiedAt,
+  validateUrl,
+} from "./validation";
 
 describe("countGraphemes", () => {
   test("見た目の1文字を1と数える", () => {
@@ -68,5 +74,58 @@ describe("validateEmail", () => {
 
   test("長すぎるメールは too_long", () => {
     expect(validateEmail(`${"a".repeat(250)}@x.com`)).toEqual({ ok: false, error: "too_long" });
+  });
+});
+
+describe("validateUrl", () => {
+  test("http・https だけを受け付け、前後の空白を取り除く", () => {
+    expect(validateUrl("  https://example.com/a  ")).toEqual({
+      ok: true,
+      value: "https://example.com/a",
+    });
+    expect(validateUrl("http://example.com")).toEqual({ ok: true, value: "http://example.com" });
+  });
+
+  test("空は required、http・https 以外と URL でない文字列は invalid_url", () => {
+    expect(validateUrl("   ")).toEqual({ ok: false, error: "required" });
+    for (const raw of [
+      "javascript:alert(1)",
+      "ftp://example.com",
+      "example.com",
+      "data:text/html,x",
+    ]) {
+      expect(validateUrl(raw)).toEqual({ ok: false, error: "invalid_url" });
+    }
+  });
+
+  test("2048文字までは受け付け、超えると too_long", () => {
+    const prefix = "https://example.com/";
+    expect(validateUrl(prefix + "a".repeat(2048 - prefix.length)).ok).toBe(true);
+    expect(validateUrl(prefix + "a".repeat(2049 - prefix.length))).toEqual({
+      ok: false,
+      error: "too_long",
+    });
+  });
+});
+
+describe("validateSourceModifiedAt", () => {
+  const now = new Date("2026-09-30T00:00:00Z");
+
+  test("過去の ISO 8601 の日時を受け付ける", () => {
+    expect(validateSourceModifiedAt("2026-09-19T15:00:00Z", now)).toEqual({
+      ok: true,
+      value: new Date("2026-09-19T15:00:00Z"),
+    });
+    expect(validateSourceModifiedAt("2026-09-20T00:00:00+09:00", now).ok).toBe(true);
+  });
+
+  test("未来は future_date、日時の形式でなければ invalid_format", () => {
+    expect(validateSourceModifiedAt("2026-09-30T00:00:01Z", now)).toEqual({
+      ok: false,
+      error: "future_date",
+    });
+    for (const raw of ["2026-09-19", "yesterday", "2026-13-40T00:00:00Z", ""]) {
+      expect(validateSourceModifiedAt(raw, now)).toEqual({ ok: false, error: "invalid_format" });
+    }
   });
 });

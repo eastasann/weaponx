@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { detectKind, isHttpUrl, linkKey, parseDriveLink } from "./link";
+import { detectKind, isDriveFileId, isHttpUrl, linkKey, parseDriveLink } from "./link";
 
 describe("parseDriveLink", () => {
   test("docs.google.com の3種類からファイル ID と種別を取り出す", () => {
@@ -97,5 +97,14 @@ describe("isHttpUrl", () => {
     expect(isHttpUrl("http://example.com")).toBe(true);
     expect(isHttpUrl("javascript:alert(1)")).toBe(false);
     expect(isHttpUrl("example.com")).toBe(false);
+  });
+});
+
+describe("isDriveFileId", () => {
+  test("ファイル ID の文字種(英数字・_・-)だけを受け付ける", () => {
+    expect(isDriveFileId("1AbC_def-9")).toBe(true);
+    for (const value of ["", "a/b", "a b", "a.b", "あ", "a".repeat(257)]) {
+      expect(isDriveFileId(value)).toBe(false);
+    }
   });
 });

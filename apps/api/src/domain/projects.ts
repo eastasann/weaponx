@@ -87,6 +87,22 @@ export async function lockProjectAndRequireRole(
   return requireProjectRole(tx, userId, id, min);
 }
 
+/**
+ * 案件の行を共有ロック(`FOR KEY SHARE`)してから役割を確かめる。資料の登録・編集は同じ案件で
+ * 同時に走れるが、案件の削除やメンバーの変更(`FOR UPDATE`)とは直列になるので、
+ * 役割と案件の状態は、この中の書き込みが終わるまで変わらない。
+ */
+export async function shareLockProjectAndRequireRole(
+  tx: DbOrTx,
+  userId: string,
+  projectId: string,
+  min: ProjectRole,
+): Promise<ProjectRole> {
+  const id = parseUuid(projectId, "PROJECT_NOT_FOUND");
+  await tx.execute(sql`select 1 from ${t.projects} where ${t.projects.id} = ${id} for key share`);
+  return requireProjectRole(tx, userId, id, min);
+}
+
 export async function listProjects(
   db: Db,
   userId: string,

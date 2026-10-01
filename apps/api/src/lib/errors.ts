@@ -71,9 +71,11 @@ export function errorBody(error: AppError) {
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+export const isUuid = (value: string): boolean => UUID_PATTERN.test(value);
+
 /** DB の uuid 型に渡す前の形式の確認。形式が違う ID は存在しない ID と同じに扱う */
 export function parseUuid(value: string, notFound: ErrorCode): string {
-  if (!UUID_PATTERN.test(value)) throw new AppError(notFound);
+  if (!isUuid(value)) throw new AppError(notFound);
   return value.toLowerCase();
 }
 

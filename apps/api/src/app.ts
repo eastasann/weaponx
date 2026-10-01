@@ -2,6 +2,8 @@ import { Elysia } from "elysia";
 import type { AppDeps } from "./lib/deps";
 import { httpBase } from "./lib/http";
 import { adminUserRoutes } from "./routes/admin-users";
+import { documentRoutes } from "./routes/documents";
+import { driveRoutes } from "./routes/drive";
 import { meRoutes } from "./routes/me";
 import { projectRoutes } from "./routes/projects";
 import { devRoutes, logoutRoutes } from "./routes/session";
@@ -15,6 +17,8 @@ export function createApp(deps: AppDeps) {
     .use(devRoutes(deps))
     .use(meRoutes(deps))
     .use(projectRoutes(deps))
+    .use(documentRoutes(deps))
+    .use(driveRoutes(deps))
     .use(adminUserRoutes(deps));
 }
 

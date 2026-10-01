@@ -77,3 +77,8 @@ export function linkKey(raw: string): string {
   const drive = parseDriveLink(raw);
   return drive ? `g:${drive.googleFileId}` : `u:${raw.trim()}`;
 }
+
+/** ドライブのファイル ID として受け付ける文字列か(`parseDriveLink` が取り出す文字種と同じ) */
+export function isDriveFileId(value: string): boolean {
+  return new RegExp(`^${FILE_ID}$`).test(value) && value.length <= 256;
+}

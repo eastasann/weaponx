@@ -3,6 +3,7 @@ import { seedDemoData } from "../scripts/seed";
 import { createApp } from "../src/app";
 import { createDb } from "../src/db/client";
 import * as schema from "../src/db/schema";
+import { createMockDrive, type Drive, type MockDrive } from "../src/drive";
 import { type Config, loadConfig } from "../src/lib/config";
 import { createLogger } from "../src/lib/logger";
 
@@ -34,7 +35,10 @@ export type Reply = { status: number; json: Json; headers: Headers; text: string
 export type TestContext = ReturnType<typeof createTestContext>;
 
 /** 結合テストの土台。API は HTTP を経由せず `app.handle` で呼ぶ(URL のホストは localhost にする) */
-export function createTestContext(overrides: Record<string, string> = {}) {
+export function createTestContext(
+  overrides: Record<string, string> = {},
+  options: { drive?: (mock: MockDrive) => Drive } = {},
+) {
   const config = testConfig(overrides);
   const { db, sql } = createDb(url as string);
   const logs: Json[] = [];
@@ -43,7 +47,8 @@ export function createTestContext(overrides: Record<string, string> = {}) {
     gcpProjectId: config.gcpProjectId,
     write: (line) => logs.push(JSON.parse(line)),
   });
-  const app = createApp({ config, db, logger });
+  const mockDrive = createMockDrive(db);
+  const app = createApp({ config, db, logger, drive: options.drive?.(mockDrive) ?? mockDrive });
 
   async function call(
     method: string,
@@ -86,6 +91,19 @@ export function createTestContext(overrides: Record<string, string> = {}) {
     return row.id;
   }
 
+  /** 版の資料名から版の ID(シードの資料名は版ごとに一意) */
+  async function documentId(name: string): Promise<string> {
+    const [row] = await db.select().from(schema.documents).where(eq(schema.documents.name, name));
+    if (!row) throw new Error(`版が見つかりません: ${name}`);
+    return row.id;
+  }
+
+  async function seriesId(name: string): Promise<string> {
+    const [row] = await db.select().from(schema.documents).where(eq(schema.documents.name, name));
+    if (!row) throw new Error(`版が見つかりません: ${name}`);
+    return row.seriesId;
+  }
+
   async function userId(email: string): Promise<string> {
     const [row] = await db.select().from(schema.users).where(eq(schema.users.email, email));
     if (!row) throw new Error(`利用者が見つかりません: ${email}`);
@@ -101,8 +119,14 @@ export function createTestContext(overrides: Record<string, string> = {}) {
     call,
     login,
     projectId,
+    documentId,
+    seriesId,
     userId,
-    seed: () => seedDemoData(db),
+    mockDrive,
+    seed: async () => {
+      await seedDemoData(db);
+      mockDrive.reset();
+    },
     close: () => sql.end(),
   };
 }

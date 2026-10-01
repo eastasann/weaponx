@@ -153,7 +153,7 @@ API の土台と、利用者・案件・メンバーの API を実装してく�
 
 ## Step 4: 資料の API(閲覧・リンクでの登録・編集・削除・検索)+ ドライブの模擬
 
-Status:
+Status: done 2026-10-01
 
 ```
 docs/02-01_system-design-doc.md の ADR-013、5.5(documents/new・versions/copy・copies・metadata-refresh を除く)・5.6・5.7(file-info)・5.10(ドライブの模擬)、
@@ -243,6 +243,7 @@ docs/design-spec.md 6.0.5・6.5.1、docs/05_operation-runbook.md 1章(event)に�
    - GET /api/auth/google/reconnect(mode: reconnect の結果と wx_drive_notice。DRIVE_MODE=mock のときの振る舞いは 02-01 5.10)
 2. リフレッシュトークンの暗号化と鍵の入れ替え(ADR-012)。復号できなければ token_decrypt_failed のログ
 3. apps/api/src/drive/google.ts: Step 4〜5 と同じインターフェースを Drive API v3 の REST(fetch)で実装する(googleapis は使わない。ADR-002)。
+   apps/api/src/drive/index.ts の createDrive は、Step 4 では google.ts が無いので DRIVE_MODE=google を起動時のエラーにしてある。google.ts を返す形に置き換える。
    アクセストークンはインスタンスのメモリにだけキャッシュする。Google の応答の分け方と、drive_reauth_required・drive_api_error のログは 02-01 8章・05 1章
 4. テスト: 単体テストで、トークンの暗号化・復号と鍵の入れ替え、returnTo の検証、ID トークンのクレームの確認、ログインの判定の順、
    Drive の応答の分け方(fetch を差し替えて確かめる)。本物の Google のアカウントはテストに持ち込まない(ADR-017)

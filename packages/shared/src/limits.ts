@@ -8,6 +8,8 @@ export const LIMITS = {
   tag: 20,
   referencesPerVersion: 20,
   tagsPerVersion: 5,
+  /** 横断検索の結果の最大件数(design-spec 6.4) */
+  searchResults: 50,
   /** 入力欄の候補(参考資料・招待する人・タグ)の表示件数 */
   candidates: 20,
   /** RFC 5321 のメールアドレスの上限 */
