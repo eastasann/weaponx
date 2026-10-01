@@ -13,9 +13,15 @@ RUN --mount=type=secret,id=extra_ca,required=false \
     bun install --frozen-lockfile --production --filter @weaponx/api --filter @weaponx/shared
 
 FROM oven/bun:1.4.2
-ENV NODE_ENV=production
+# 版はビルド時にイメージへ焼き込む。デプロイが環境変数で上書きしないので、Terraform の差分にならず、
+# 前のバージョンに戻したときもイメージ自身の版を返す(04 2章)
+ARG APP_VERSION=dev
+ENV NODE_ENV=production \
+    APP_VERSION=${APP_VERSION}
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
+# 依存の実体は /app/node_modules/.bun にあり、apps/api/node_modules のリンクがそこを指す。両方そろえて初めて import が通る
+COPY --from=deps /app/apps/api/node_modules apps/api/node_modules
 COPY package.json ./
 COPY packages/shared packages/shared
 COPY apps/api apps/api

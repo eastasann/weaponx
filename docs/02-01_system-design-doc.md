@@ -48,7 +48,7 @@
 
 | 流れ | 経路 |
 |------|------|
-| 画面の読み込み | ブラウザ → LB → バックエンドバケット。`/assets/*` はそのまま、それ以外のパス(`/`, `/projects/...` 等)は URL マップで `/index.html` に書き換える(SPA のフォールバック)。キャッシュの方針は7章「パフォーマンス」 |
+| 画面の読み込み | ブラウザ → LB → バックエンドバケット。`/assets/*` はそのまま、それ以外のパス(`/`, `/projects/...` 等)はバケットに無く 404 になるので、URL マップのカスタムエラー応答で `/index.html` の 200 に置き換える(SPA のフォールバック。バックエンドバケットは URL の書き換えを使えない。API のルートには付けず、API の 404 はそのまま返す)。キャッシュの方針は7章「パフォーマンス」 |
 | API | ブラウザ(Eden Treaty)→ LB → Cloud Armor(レート制限)→ Cloud Run。セッションは Cookie、状態は PostgreSQL。どのインスタンスに振り分けられても同じ結果になる |
 | ログイン | ブラウザ → `/api/auth/google/login` → Google の同意画面 → `/api/auth/google/callback` → セッション作成 → 元の URL(5.2) |
 | ドライブ操作 | Cloud Run → Google Drive API v3(REST)。リフレッシュトークンは暗号化して `drive_connections` に保存し、アクセストークンは Cloud Run のインスタンスのメモリにだけキャッシュする(失っても取り直すだけ。ADR-013) |
@@ -130,7 +130,7 @@
 
 **理由:** 利用者の希望(「ロードバランサーまで載せたい」)。入口を1つにすることで、同じオリジン(ADR-001)、証明書の自動更新、CDN、レート制限を1か所で扱える。ログインの入口(`/api/auth/*`)は認証前に誰でも叩けるので、アプリより手前で絞る。レート制限をロードバランサーで行えば、Cloud Run が何台になっても IP ごとの数え方がそろう。
 
-**トレードオフ:** Cloud Armor に月 約 $7 かかる。不要と判断したら外せる(アプリ側の制限は持たないので、外すとログインの入口が無制限になる)。SPA のフォールバック(未知のパスを `/index.html` に書き換える)を URL マップのルートルールで書く必要がある。捨てた案: Firebase Hosting の rewrites(同じオリジンと CDN を安く得られるが、ロードバランサーを自分で組む希望に合わず、Cloud Armor を付けられない)、Cloud Run のドメインマッピング(同上。パスの振り分けもできない)、アプリの中でのレート制限(複数台では台ごとに数えることになり、共有するには Redis 等が要る。1章の「メモリに正しさに関わる状態を持たない」に合わない)。
+**トレードオフ:** Cloud Armor に月 約 $7 かかる。不要と判断したら外せる(アプリ側の制限は持たないので、外すとログインの入口が無制限になる)。SPA のフォールバック(バケットに無いパスの 404 を `/index.html` の 200 に置き換える)を URL マップのカスタムエラー応答で書く必要がある。捨てた案: Firebase Hosting の rewrites(同じオリジンと CDN を安く得られるが、ロードバランサーを自分で組む希望に合わず、Cloud Armor を付けられない)、Cloud Run のドメインマッピング(同上。パスの振り分けもできない)、アプリの中でのレート制限(複数台では台ごとに数えることになり、共有するには Redis 等が要る。1章の「メモリに正しさに関わる状態を持たない」に合わない)。
 
 ### ADR-008: DB は Cloud SQL for PostgreSQL 16
 
@@ -233,7 +233,7 @@ Google のアクセストークン(1時間有効)だけは、インスタンス�
 
 ### ADR-019: 監視は Cloud Logging / Monitoring / Error Reporting に寄せる
 
-**決定:** ログは構造化 JSON を標準出力に出し、Cloud Logging で集める。例外は Error Reporting、稼働監視とアラートは Cloud Monitoring(アップタイムチェックとアラートポリシー)で行う。画面で起きた想定外のエラーは、API の `POST /api/client-errors` に送り、同じ Cloud Logging に残す。Sentry 等の外部サービスは使わない。
+**決定:** ログは構造化 JSON を標準出力に出し、Cloud Logging で集める。例外は Error Reporting に集め、通知は `event="unhandled_error"` のログから直接出し(Error Reporting の通知は Terraform で作れないため。`docs/05_operation-runbook.md` 2章)、稼働監視とアラートは Cloud Monitoring(アップタイムチェックとアラートポリシー)で行う。画面で起きた想定外のエラーは、API の `POST /api/client-errors` に送り、同じ Cloud Logging に残す。Sentry 等の外部サービスは使わない。
 
 **理由:** 追加のアカウントが要らず、Terraform で一緒に管理できる。ログとエラーの置き場所が GCP の中だけになり、資料名などが外部のサービスに出る経路を増やさない(7章「ログ」)。
 
@@ -1191,8 +1191,8 @@ export const documentTags = pgTable(
 | 項目 | ツール | 設定 |
 |------|--------|------|
 | アプリのログ | Cloud Logging | 構造化 JSON を標準出力へ。リクエスト ID の付け方は8章「ログとの対応」 |
-| LB のログ | Cloud Logging | バックエンドサービスとバックエンドバケットのログを有効化 |
-| 例外 | Error Reporting | API の `ERROR` のログ(スタック付き)から自動で集める。画面のエラーは集めない(ADR-019) |
+| LB のログ | Cloud Logging | バックエンドサービスのログを有効化(`log_config`)。バックエンドバケットには設定項目が無く、LB の既定の記録に任せる |
+| 例外 | Error Reporting + Cloud Monitoring | API の `ERROR` のログ(スタック付き)から Error Reporting が自動で集める。メールの通知は `event="unhandled_error"` のログのアラート(1時間に1通まで)。画面のエラーは集めない(ADR-019) |
 | 画面の例外 | Cloud Logging(API 経由) | `POST /api/client-errors`(5.10、7章「ログ」) |
 | 稼働監視・アラート | Cloud Monitoring(アップタイムチェック、アラートポリシー、ログベースの指標) | `docs/05_operation-runbook.md` 2章 |
 | DB | Cloud SQL の組み込みメトリクス + Query Insights | 遅いクエリは Query Insights |

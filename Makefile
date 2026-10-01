@@ -7,7 +7,7 @@ E2E := $(COMPOSE) --profile e2e run --rm e2e
 
 .PHONY: setup dev stop build test e2e e2e-report lint format typecheck tokens \
 	db-up db-push db-generate db-migrate db-seed db-reset db-studio db-psql bootstrap-admin \
-	ops-login ops-shell tf-init tf-plan tf-apply tf-output doc-lint shell deps-update clean
+	ops-login ops-shell tf-init tf-validate tf-plan tf-apply tf-output doc-lint shell deps-update clean
 
 setup:
 	@if [ ! -f .env ]; then \
@@ -29,13 +29,15 @@ dev:
 stop:
 	$(COMPOSE) down
 
+# API のイメージに焼き込む版。リリースのビルドは build.yml が make build APP_VERSION={バージョン} で渡す
+build: APP_VERSION ?= dev
 build:
 	$(TOOLS_NODEPS) bun run --cwd apps/web build
 	@ca="$${EXTRA_CA_CERT:-$$(sed -n 's/^EXTRA_CA_CERT=//p' .env 2>/dev/null)}"; \
 	if [ -n "$$ca" ]; then \
-		docker build --secret "id=extra_ca,src=$$ca" -f apps/api/Dockerfile -t weaponx-api:local .; \
+		docker build --build-arg APP_VERSION=$(APP_VERSION) --secret "id=extra_ca,src=$$ca" -f apps/api/Dockerfile -t weaponx-api:local .; \
 	else \
-		docker build -f apps/api/Dockerfile -t weaponx-api:local .; \
+		docker build --build-arg APP_VERSION=$(APP_VERSION) -f apps/api/Dockerfile -t weaponx-api:local .; \
 	fi
 
 test:
@@ -109,8 +111,15 @@ ops-login:
 ops-shell:
 	$(OPS) bash
 
+# state のバケット名({project_id}-tfstate)は production.tfvars の project_id から作る(ADR-015)
 tf-init:
-	$(OPS) terraform -chdir=infra init
+	@pid="$$(sed -n 's/^project_id[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' infra/environments/production.tfvars)"; \
+	test -n "$$pid" || { echo "infra/environments/production.tfvars に project_id がありません"; exit 1; }; \
+	$(OPS) terraform -chdir=infra init -backend-config="bucket=$$pid-tfstate"
+
+# GCP に触れずに構文と参照を確かめる(CI も使う)
+tf-validate:
+	$(OPS) sh -c 'terraform -chdir=infra init -backend=false && terraform -chdir=infra validate && terraform -chdir=infra fmt -check -recursive'
 
 tf-plan:
 	$(OPS) terraform -chdir=infra plan -var-file=environments/production.tfvars

@@ -43,24 +43,27 @@
 
 **ci.yml**: 全PRと main への push:
 ```
-make setup → make lint → make typecheck → make test → make e2e → make build → make tokens して差分が無いこと
+make setup → make lint → make typecheck → make test → make e2e → make build → make tokens して差分が無いこと → make tf-validate
 ```
 
 **build.yml**: mainマージ時:
 ```
-make build → API のイメージを asia-northeast1-docker.pkg.dev/{PROJECT_ID}/weaponx/api:{バージョン} に push
+make build APP_VERSION={バージョン} → API のイメージを asia-northeast1-docker.pkg.dev/{PROJECT_ID}/weaponx/api:{バージョン} に push
 → 画面の dist/ を gs://{PROJECT_ID}-weaponx-releases/web/{バージョン}/ にアップロード → git タグ build-{バージョン}
 ```
+
+保管期間を過ぎて消えたバージョンは、main のこのワークフローを `version` 入力つきで手動実行し、タグ `build-{バージョン}` のコミットから作り直す(`weaponx-deployer` は main のワークフローからしか使えない)。`APP_VERSION` の焼き込みを入れる前のタグから作り直したイメージは、版が `dev` になる。
 
 **deploy.yml**: `deploy/production/version` の変更時:
 ```
 1. バージョンのイメージと画面の静的ファイルがそろっているか確かめる(無ければ止める)
 2. マイグレーション: Cloud Run ジョブ weaponx-migrate のイメージをそのバージョンに更新して実行し、終わるまで待つ
-3. API: Cloud Run weaponx-api にそのバージョンのイメージで新しいリビジョンを出し、トラフィックを 100% 移す(APP_VERSION も更新)
+3. API: Cloud Run weaponx-api にそのバージョンのイメージで新しいリビジョンを出し、トラフィックを 100% 移す(版は `APP_VERSION` としてイメージのビルド時に焼き込んであり、デプロイでは更新しない)
 4. 画面: gs://{PROJECT_ID}-weaponx-releases/web/{バージョン}/assets/ を gs://{PROJECT_ID}-weaponx-web/assets/ にコピー(古いファイルは消さない)
    → 最後に index.html をコピー(どちらも Cache-Control は 02-01 7章「パフォーマンス」のとおりに付ける)
 5. 確認: /api/healthz の version がそのバージョン、/api/readyz が 200、/ が 200
 6. 保管: イメージに prod-{バージョン} のタグを付け、画面のビルドを gs://{PROJECT_ID}-weaponx-releases/deployed/{バージョン}/ にも写す(本番に出したバージョンは自動の削除の対象外にする。5章)
+7. 整理: Cloud Run の古いリビジョンを消す(直近10とトラフィックのあるものを残す)
 ```
 
 順番の理由: DB → API → 画面の順に新しくする。マイグレーションは1つ前の版の API でも動く追加的な変更に限り(5章)、新しい API は1つ前の画面からの呼び出しも受け付ける。途中で止まっても、動いている組み合わせが壊れない。
@@ -98,6 +101,7 @@ gcloud services enable \
   iamcredentials.googleapis.com \
   sts.googleapis.com \
   cloudresourcemanager.googleapis.com \
+  cloudtrace.googleapis.com \
   monitoring.googleapis.com \
   logging.googleapis.com \
   billingbudgets.googleapis.com \
@@ -137,6 +141,7 @@ cp infra/environments/production.tfvars.example infra/environments/production.tf
 # production.tfvars を編集: project_id, project_number, region(asia-northeast1), domain,
 #   google_client_id, google_picker_api_key, github_repository(eastasann/weaponx),
 #   alert_email, billing_account_id, app_enabled = false
+# このファイルは秘密を含まないので、コミットする(infra.yml と deploy.yml が読む)
 make tf-init
 make tf-plan
 make tf-apply
@@ -147,15 +152,15 @@ Terraformが作成するリソース(名前と役割。設定値の正は `infra
 | リソース | 名前 | 役割 |
 |---------|------|------|
 | グローバル IP・Google マネージド証明書 | `weaponx-ip`、`weaponx-cert` | `{DOMAIN}` の入口 |
-| URL マップ・HTTPS プロキシ・転送ルール | `weaponx-url-map` ほか | `/api/*` → `weaponx-api-backend`、`/assets/*` → `weaponx-web-backend`、それ以外 → `weaponx-web-backend` の `/index.html`。HTTP は HTTPS へ転送 |
+| URL マップ・HTTPS プロキシ・転送ルール | `weaponx-url-map` ほか | `/api/*` → `weaponx-api-backend`、`/assets/*` → `weaponx-web-backend`、それ以外 → `weaponx-web-backend`(バケットに無いパスの 404 は `/index.html` の 200 に置き換える)。HTTP は HTTPS へ転送 |
 | バックエンドサービス | `weaponx-api-backend` | サーバーレス NEG `weaponx-api-neg` 経由で Cloud Run へ。Cloud Armor のポリシー `weaponx-api-policy` を付ける |
 | バックエンドバケット | `weaponx-web-backend` | `{PROJECT_ID}-weaponx-web` を Cloud CDN 付きで配る |
 | Cloud Storage | `{PROJECT_ID}-weaponx-web`、`{PROJECT_ID}-weaponx-releases` | 配信する画面 / バージョンごとの画面のビルドの保管 |
 | Cloud SQL | インスタンス `weaponx-db`、データベース `weaponx` | 本番の DB(構成は 02-01 ADR-008) |
 | Artifact Registry | `weaponx` | API のイメージ |
 | Secret Manager(入れ物だけ) | `weaponx-database-url`、`weaponx-google-client-secret`、`weaponx-token-encryption-keys` | 値は Step 4 で入れる |
-| サービスアカウント | `weaponx-api`、`weaponx-deployer` | 実行用(Cloud SQL クライアント、シークレットの読み取り、ログ・トレースの書き込み)/ GitHub Actions 用(Cloud Run とジョブの更新・実行、イメージの push、バケットへの書き込み) |
-| Workload Identity | プール `github` とプロバイダー | `eastasann/weaponx` のリポジトリだけを許可 |
+| サービスアカウント | `weaponx-api`、`weaponx-deployer`、`weaponx-tf-apply`、`weaponx-tf-plan` | 実行用(Cloud SQL クライアント、シークレットの読み取り、ログ・トレースの書き込み)/ `build.yml`・`deploy.yml` 用(Cloud Run とジョブの更新・実行、イメージの push、バケットへの書き込み)/ `infra.yml` の apply 用(プロジェクトのオーナーと、請求先アカウントの予算の管理)/ `infra.yml` の plan 用(読み取りだけ。state には書かないので plan は `-lock=false`) |
+| Workload Identity | プール `github` とプロバイダー | `eastasann/weaponx` のリポジトリだけを許可。`weaponx-deployer` と `weaponx-tf-apply` は main のブランチのワークフローだけが使える(PR のワークフローは `weaponx-tf-plan` だけ) |
 | Cloud Monitoring・予算 | — | アップタイムチェック、アラートポリシー、ログベースの指標、メールの通知チャネル、予算アラート(`docs/05_operation-runbook.md` 2章) |
 | Cloud Run(2回目で作る) | サービス `weaponx-api`、ジョブ `weaponx-migrate` | API / マイグレーションと初期管理者の登録。ジョブは API と同じイメージで、作業ディレクトリは `apps/api` |
 
@@ -199,7 +204,7 @@ unset DB_PASSWORD
 | `APP_ORIGIN` | `https://{DOMAIN}` | Terraform(`domain` から) |
 | `PORT` | Cloud Run が入れる(8080) | Cloud Run |
 | `LOG_LEVEL` | `info` | Terraform(固定) |
-| `APP_VERSION` | デプロイしたバージョン | `deploy.yml` |
+| `APP_VERSION` | そのイメージのバージョン | イメージのビルド時に焼き込む(`build.yml` が `make build APP_VERSION=...` で渡す。Terraform には書かない) |
 | `GCP_PROJECT_ID` | `{PROJECT_ID}` | Terraform(`project_id` から) |
 | `DRIVE_MODE` | `google` | Terraform(固定。`mock` だと API は起動しない。02-01 5.10) |
 | `DEV_LOGIN_ENABLED` | `false` | Terraform(固定。`true` だと API は起動しない。02-01 5.10) |
@@ -220,6 +225,8 @@ unset DB_PASSWORD
 | `GCP_REGION` | `asia-northeast1` |
 | `GCP_WIF_PROVIDER` | `make tf-output NAME=wif_provider` の値 |
 | `GCP_DEPLOY_SA` | `make tf-output NAME=deployer_service_account` の値 |
+| `GCP_TF_APPLY_SA` | `make tf-output NAME=terraform_service_account` の値 |
+| `GCP_TF_PLAN_SA` | `make tf-output NAME=terraform_plan_service_account` の値 |
 
 ブランチ保護(`main`): PR 必須、`ci.yml` の成功必須、squash マージだけを許可。
 
@@ -255,7 +262,7 @@ gcloud run jobs execute weaponx-migrate --region=asia-northeast1 --wait \
 
 `deploy/production/version` を前のバージョンに戻すPR(promotion PRのrevert)をマージする。デプロイと同じパイプラインが走り、API と画面が前のバージョンに戻る(マイグレーションは戻らない。下の「DB」)。以下は緊急時にCLIで直接戻す手順。
 
-本番に出したことのあるバージョンのイメージ(`prod-` のタグ付き)と画面のビルド(`deployed/`)は、自動の削除の対象外なので、いつでも戻せる。一度も本番に出していないバージョンが保管期間を過ぎて消えていたら、git タグ `build-{バージョン}` から `build.yml` を手動で実行して作り直す。
+本番に出したことのあるバージョンのイメージ(`prod-` のタグ付き)と画面のビルド(`deployed/`)は、自動の削除の対象外なので、いつでも戻せる。一度も本番に出していないバージョンが保管期間(30日。直近5つのイメージは日数によらず残る)を過ぎて消えていたら、main の `build.yml` を `version` 入力つきで手動実行して作り直す(git タグ `build-{バージョン}` のコミットをビルドする)。
 
 ### アプリケーションの緊急ロールバック
 

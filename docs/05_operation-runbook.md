@@ -49,10 +49,10 @@ Terraform(`infra/monitoring.tf`)で作る。通知はすべてメール(`alert_e
 
 | 監視対象 | メトリクス | 閾値 | アラート先 |
 |----------|-----------|------|-----------|
-| 稼働 | アップタイムチェック `https://{DOMAIN}/api/healthz`(5分ごと、3地域) | 2回続けて失敗 | メール |
+| 稼働 | アップタイムチェック `https://{DOMAIN}/api/healthz`(5分ごと、3地域) | 2地域以上で2回続けて失敗(10分) | メール |
 | API の失敗率 | LB のバックエンドサービス `weaponx-api-backend` の 5xx の割合 | 5分間で 5% 超 | メール |
 | API の遅延 | LB のバックエンドの遅延 p95 | 10分間 2秒超 | メール |
-| 例外(API) | Error Reporting の新しいエラーグループ | 1件でも | メール(Error Reporting の通知) |
+| 例外(API) | `event="unhandled_error"` のログ(Error Reporting の「新しいエラーグループ」の通知は Terraform で作れないので、同じログを直接拾う) | 1件でも(1時間に1通まで) | メール |
 | 画面のエラー | ログベースの指標 `event="client_error"` の件数 | 1時間に5件超 | メール(件数だけ。本文は載せない) |
 | 要再連携の急増 | ログベースの指標 `event="drive_reauth_required"` の件数 | 1時間に5件超 | メール |
 | ログイン失敗の急増 | ログベースの指標 `event="login_failed"` の件数 | 1時間に20件超 | メール |
@@ -246,7 +246,7 @@ gcloud logging read \
 | 費用の確認 | 月1回 | 請求レポートで LB・Cloud SQL・Cloud Armor が想定(`docs/02-01_system-design-doc.md` 2章の概算)に収まっているか |
 | KPI の確認 | 月1回 | 下の「KPI の測り方」(`docs/01_prd.md` 5章) |
 
-古い Cloud Run のリビジョン、Artifact Registry のイメージ、画面のビルドの保管は、自動で消える設定にしてある(期間は `infra/`)。本番に出したバージョンは消えない(`docs/04_deployment-procedure.md` 5章)。
+Artifact Registry のイメージ(直近5つは残す)と画面のビルドの保管は、自動で消える設定にしてある(30日。期間は `infra/`)。Cloud Run のリビジョンは、`deploy.yml` がデプロイのたびに直近10とトラフィックのあるもの以外を消す。本番に出したバージョンは消えない(`docs/04_deployment-procedure.md` 5章)。
 
 ### 暗号化鍵の入れ替え
 

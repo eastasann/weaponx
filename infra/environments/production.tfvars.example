@@ -1,0 +1,12 @@
+# 秘密は含めない(Secret Manager の値は gcloud で入れる。docs/04_deployment-procedure.md 3章)。
+# コピーした production.tfvars は infra.yml が使うので、リポジトリにコミットする
+project_id            = "your-project-id"
+project_number        = "123456789012"
+region                = "asia-northeast1"
+domain                = "weaponx.example.com"
+google_client_id      = "xxxxxxxx.apps.googleusercontent.com"
+google_picker_api_key = "AIza..."
+github_repository     = "eastasann/weaponx"
+alert_email           = "you@example.com"
+billing_account_id    = "012345-6789AB-CDEF01"
+app_enabled           = false

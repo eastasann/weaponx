@@ -1,0 +1,117 @@
+name: deploy
+
+# deploy/production/version に書かれたバージョンを本番へ出す。ロールバックはこのファイルを戻す PR のマージ。
+# DB → API → 画面の順に新しくする(docs/04_deployment-procedure.md 2章)
+on:
+  push:
+    branches: [main]
+    paths:
+      - deploy/production/version
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  REGION: ${{ vars.GCP_REGION }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: バージョンと環境
+        run: |
+          version="$(tr -d '[:space:]' < deploy/production/version)"
+          if ! [[ "$version" =~ ^[0-9a-f]{12}$ ]]; then
+            echo "deploy/production/version の値が不正です: 12桁の16進のバージョンだけを1行で書いてください" >&2
+            exit 1
+          fi
+          domain="$(sed -n 's/^domain[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' infra/environments/production.tfvars)"
+          test -n "$domain" || { echo "infra/environments/production.tfvars に domain がありません" >&2; exit 1; }
+          {
+            echo "VERSION=$version"
+            echo "DOMAIN=$domain"
+            echo "IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/weaponx/api"
+            echo "RELEASES=gs://$PROJECT_ID-weaponx-releases"
+            echo "WEB=gs://$PROJECT_ID-weaponx-web"
+          } >> "$GITHUB_ENV"
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: 1. イメージと画面のビルドがそろっているか
+        run: |
+          gcloud artifacts docker images describe "$IMAGE:$VERSION" >/dev/null \
+            || { echo "イメージ $IMAGE:$VERSION がありません。build.yml を流してください" >&2; exit 1; }
+          # 本番に出したことのあるバージョンは deployed/ に残る。無ければ main のビルドの web/
+          if gcloud storage ls "$RELEASES/deployed/$VERSION/index.html" >/dev/null; then
+            echo "WEB_SRC=$RELEASES/deployed/$VERSION" >> "$GITHUB_ENV"
+          elif gcloud storage ls "$RELEASES/web/$VERSION/index.html" >/dev/null; then
+            echo "WEB_SRC=$RELEASES/web/$VERSION" >> "$GITHUB_ENV"
+          else
+            echo "画面のビルド($VERSION)がありません。build.yml を流してください" >&2
+            exit 1
+          fi
+
+      - name: 2. マイグレーション
+        run: |
+          gcloud run jobs update weaponx-migrate --region "$REGION" --image "$IMAGE:$VERSION"
+          gcloud run jobs execute weaponx-migrate --region "$REGION" --wait
+
+      - name: 3. API
+        run: |
+          gcloud run services update weaponx-api --region "$REGION" \
+            --image "$IMAGE:$VERSION"
+          # 緊急ロールバックで特定のリビジョンに固定されていても、最新に戻す
+          gcloud run services update-traffic weaponx-api --region "$REGION" --to-latest
+
+      - name: 4. 画面(assets を先に、index.html を最後に)
+        run: |
+          # 古いファイルは消さない(1つ前の index.html がまだ参照しているため)
+          gcloud storage cp --recursive "$WEB_SRC/assets/*" "$WEB/assets/" \
+            --cache-control="public, max-age=31536000, immutable"
+          gcloud storage cp "$WEB_SRC/index.html" "$WEB/index.html" --cache-control="no-cache"
+
+      - name: 5. 確認
+        run: |
+          base="https://$DOMAIN"
+          for i in $(seq 1 30); do
+            got="$(curl -fsS "$base/api/healthz" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' || true)"
+            [ "$got" = "$VERSION" ] && break
+            sleep 10
+          done
+          [ "$got" = "$VERSION" ] || { echo "/api/healthz の version が $VERSION になりません(今: '$got')" >&2; exit 1; }
+          curl -fsS -o /dev/null "$base/api/readyz"
+          curl -fsS -o /dev/null "$base/"
+
+      - name: 6. 保管(本番に出したバージョンは自動の削除の対象外)
+        run: |
+          gcloud artifacts docker tags add "$IMAGE:$VERSION" "$IMAGE:prod-$VERSION"
+          if [ "$WEB_SRC" != "$RELEASES/deployed/$VERSION" ]; then
+            gcloud storage cp --recursive "$WEB_SRC/*" "$RELEASES/deployed/$VERSION/"
+          fi
+
+      - name: 古いリビジョンの整理(直近10と、トラフィックのあるものを残す)
+        run: |
+          serving="$(gcloud run services describe weaponx-api --region "$REGION" \
+            --format='value(status.traffic.revisionName)' | tr ';' '\n')"
+          gcloud run revisions list --service weaponx-api --region "$REGION" \
+            --sort-by='~metadata.creationTimestamp' --format='value(metadata.name)' \
+            | tail -n +11 \
+            | { grep -vxF "$serving" || true; } \
+            | xargs -r -n1 gcloud run revisions delete --region "$REGION" --quiet

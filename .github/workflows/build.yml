@@ -1,0 +1,80 @@
+name: build
+
+# main へのマージで、本番に出せるアーティファクトを作る。
+# 本番に出すのは deploy.yml(deploy/production/version の更新)。
+# 保管期間を過ぎて消えたバージョンは、main のこのワークフローを version を指定して手動で流し、
+# git タグ build-{バージョン} のコミットから作り直す(デプロイ用のサービスアカウントは main でしか使えない)
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 作り直すバージョン(12桁の16進)。空なら main の先頭
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: build-${{ inputs.version || github.sha }}
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  REGION: ${{ vars.GCP_REGION }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.version && format('build-{0}', inputs.version) || github.sha }}
+
+      - name: バージョン
+        run: |
+          version="$(git rev-parse HEAD | cut -c1-12)"
+          if [ -n "$INPUT_VERSION" ] && [ "$INPUT_VERSION" != "$version" ]; then
+            echo "タグ build-$INPUT_VERSION のコミットが $version です。タグを確かめてください" >&2
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - run: make setup
+      - run: make build APP_VERSION="$VERSION"
+
+      - name: API のイメージを push
+        run: |
+          image="$REGION-docker.pkg.dev/$PROJECT_ID/weaponx/api:$VERSION"
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          docker tag weaponx-api:local "$image"
+          docker push "$image"
+
+      - name: 画面の静的ファイルをアップロード
+        run: |
+          gcloud storage cp --recursive "apps/web/dist/*" \
+            "gs://$PROJECT_ID-weaponx-releases/web/$VERSION/"
+
+      - name: git タグ
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/build-$VERSION" >/dev/null; then
+            echo "build-$VERSION は作成済み"
+          else
+            git tag "build-$VERSION"
+            git push origin "build-$VERSION"
+          fi

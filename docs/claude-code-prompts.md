@@ -408,7 +408,8 @@ docs/02-01_system-design-doc.md の 5.5・5.8・5.9 に従って、残りの画�
 
 ## Step 11: インフラ + CI/CD
 
-Status:
+Status: blocked 2026-10-01
+GCP のプロジェクトと認証情報が無く、ゴールの `make tf-init` / `make tf-plan` の確認ができない(用意するのはユーザー。04 3章 Step 1〜2)。コードと docs は完了済みで、`terraform validate` と `fmt -check` は ops の公式バイナリ・provider と同じ版(Terraform 1.13.3、google 6.50.0)で通した。ops のイメージは、このセッションの Docker デーモンのプロキシ設定が古く(接続拒否)ビルドできなかった
 
 ```
 docs/04_deployment-procedure.md の 2章・3章・5章、docs/02-01_system-design-doc.md の 2章・ADR-006〜ADR-009・ADR-015・ADR-019・ADR-022・

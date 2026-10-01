@@ -136,7 +136,7 @@ make dev
 | `APP_ORIGIN` | `http://localhost:5173` | 画面のオリジン。CSRF の確認と OAuth の戻り先に使う |
 | `PORT` | `3000` | API の待ち受け |
 | `LOG_LEVEL` | `debug` | `debug` / `info` / `warn` / `error` |
-| `APP_VERSION` | `dev` | `/api/healthz` と `/api/config` が返す版 |
+| `APP_VERSION` | `dev` | `/api/healthz` と `/api/config` が返す版。本番はイメージのビルド時に焼き込む(`make build APP_VERSION=...`) |
 | `GCP_PROJECT_ID` | (空) | ログ行の `logging.googleapis.com/trace` に使う GCP のプロジェクト ID。空のときはその項目を出さない(`docs/02-01_system-design-doc.md` 8章) |
 | `DATABASE_URL` | `postgres://weaponx:weaponx@db:5432/weaponx` | 開発用 DB |
 | `TEST_DATABASE_URL` | `postgres://weaponx:weaponx@db:5432/weaponx_test` | 結合テスト用 DB(テストのたびに作り直す) |
@@ -192,7 +192,7 @@ make tf-apply      # 初回だけ。以降は infra.yml に任せる
 make ops-shell
 ```
 
-- 変数は `infra/environments/production.tfvars`(プロジェクト ID、リージョン、ドメインなど。秘密は含めない)
+- 変数は `infra/environments/production.tfvars`(プロジェクト ID、リージョン、ドメインなど。秘密は含めないので、コミットする。`infra.yml` と `deploy.yml` が読む)
 - 作るリソースの一覧は `docs/04_deployment-procedure.md` 3章
 
 ### CI/CD連携とtfstate
@@ -278,7 +278,8 @@ make e2e-report
 | `make db-psql` | psql で開発用 DB につなぐ |
 | `make bootstrap-admin EMAIL=...` | 有効な管理者が1人もいないときに、最初の管理者を登録する。同じメールの利用者が既にいれば、有効な管理者にする。有効な管理者がいれば何もせず終了コード1で終わる。メールの形式が違えば終了コード2 |
 | `make ops-login` / `make ops-shell` | gcloud のログイン / ops のコンテナのシェル |
-| `make tf-init` / `make tf-plan` / `make tf-apply` | Terraform |
+| `make tf-init` / `make tf-plan` / `make tf-apply` | Terraform(state のバケットは `production.tfvars` の `project_id` から決める) |
+| `make tf-validate` | GCP に触れずに Terraform の構文・参照・整形を確かめる(`backend` なしの init、validate、fmt -check)。CI も使う |
 | `make tf-output NAME=...` | Terraform の出力値を1つ表示する |
 | `make doc-lint` | ドキュメントと実体の整合検査(`scripts/doc-lint.sh --docs`) |
 | `make shell` | `tools` のコンテナのシェル(Bun・drizzle-kit などを直接使うとき) |
