@@ -1128,7 +1128,7 @@ export const documentTags = pgTable(
 | エラー種別 | 表示方法 |
 |-----------|----------|
 | バリデーションエラー | `VALIDATION_FAILED.details.fields` のキーで該当する欄を特定し、値(`too_long` 等)で翻訳ファイルの文言を選ぶ |
-| 通信・サーバーエラー | ネットワーク断(`fetch` の例外)も `INTERNAL` と同じ分類として扱う |
+| 通信・サーバーエラー | ネットワーク断(`fetch` の例外)も `INTERNAL` と同じ分類として扱う。読み込み(TanStack Query の query)は、通信の失敗と 5xx だけを1回再試行し(0.5秒後)、それでも失敗したら「読み込めませんでした」を出す。4xx は再試行しない |
 | 認可エラー | 401 は `/login?returnTo={今のパス}` へ送る。404 系・403 系は分類どおり |
 | 想定外のエラー | エラー境界で捕まえ、内容を `POST /api/client-errors` に送る |
 | 要再連携 | `DRIVE_REAUTH_REQUIRED` を受けたら `GET /api/me` のキャッシュの `drive.status` を `needs_reauth` に書き換える(帯とダイアログの表示はそこから決まる) |

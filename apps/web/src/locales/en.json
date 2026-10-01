@@ -1,5 +1,8 @@
 {
-  "app": { "name": "weaponx", "tagline": "See how documents connect and which is the latest" },
+  "app": {
+    "name": "weaponx",
+    "tagline": "See how documents connect and which is the latest"
+  },
   "common": {
     "close": "Close",
     "cancel": "Cancel",
@@ -98,5 +101,104 @@
   "table": {
     "open": "Open",
     "sortBy": "Sort by {{column}}"
+  },
+  "roles": {
+    "owner": "Owner",
+    "editor": "Editor",
+    "viewer": "Viewer"
+  },
+  "kinds": {
+    "google_doc": "Document",
+    "google_slides": "Slides",
+    "google_sheets": "Spreadsheet",
+    "pdf": "PDF",
+    "other": "Other"
+  },
+  "home": {
+    "title": "Projects",
+    "searchPlaceholder": "Search documents in your projects",
+    "searchLabel": "Search documents",
+    "clearSearch": "Clear search",
+    "createProject": "+ Create project",
+    "columns": {
+      "name": "Project",
+      "role": "Your role",
+      "documentCount": "Documents",
+      "lastActivity": "Last updated",
+      "document": "Document",
+      "project": "Project",
+      "kind": "Type",
+      "updated": "Updated"
+    },
+    "noResults": "No documents match \"{{q}}\"",
+    "truncated": "There are more than 50 results. Add terms to narrow them down.",
+    "olderBadge": "Older",
+    "emptyTitle": "You are not in any projects yet",
+    "emptyHint": "Projects you are invited to will appear here",
+    "resultsHeading_one": "{{count}} result for \"{{q}}\"",
+    "resultsHeading_other": "{{count}} results for \"{{q}}\""
+  },
+  "createProject": {
+    "title": "Create project",
+    "nameLabel": "Project name",
+    "submit": "Create",
+    "created": "Project created"
+  },
+  "project": {
+    "back": "← Home",
+    "menu": "Project menu",
+    "rename": "Rename project",
+    "delete": "Delete project",
+    "filterPlaceholder": "Filter by document name",
+    "filterLabel": "Filter by document name",
+    "kindLabel": "Type",
+    "kindAll": "All",
+    "columns": {
+      "name": "Document",
+      "kind": "Type",
+      "updated": "Updated",
+      "registeredBy": "Added by"
+    },
+    "moreTags": "+{{count}}",
+    "emptyTitle": "No documents yet",
+    "emptyViewer": "No documents yet. They will appear here when an editor adds one.",
+    "filteredEmpty": "No documents match the filters",
+    "clearFilters": "Clear filters",
+    "loadFailed": "Could not load documents",
+    "notFound": "This project was not found, or you are not a member",
+    "renameTitle": "Rename project",
+    "renameSubmit": "Save",
+    "renamed": "Project renamed",
+    "deleteTitle": "Delete project",
+    "deleteMessage": "Delete \"{{name}}\". The records will disappear from lists and search. Files in their original locations are not deleted.",
+    "deleteConfirm": "Delete",
+    "deleted": "Project deleted",
+    "members_one": "{{count}} member",
+    "members_other": "{{count}} members",
+    "count_one": "{{count}} document",
+    "count_other": "{{count}} documents",
+    "olderVersions_one": "{{count}} older version",
+    "olderVersions_other": "{{count}} older versions",
+    "emptyHint": "You can create a document here, or register the link of an existing one"
+  },
+  "panel": {
+    "label": "Document details",
+    "close": "Close",
+    "open": "Open",
+    "versionNo": "v{{n}}",
+    "versions": "Versions",
+    "references": "References",
+    "referencedBy": "Referenced by",
+    "none": "None",
+    "overview": {
+      "modified": "Updated",
+      "registeredBy": "Added by",
+      "changeNote": "Change note"
+    },
+    "usesVersion": "References v{{n}} of this document",
+    "noAccess": "Document you cannot view",
+    "deleted": "Deleted document",
+    "projectSuffix": "({{project}})",
+    "versionLatest": "v{{n}} (Latest)"
   }
 }

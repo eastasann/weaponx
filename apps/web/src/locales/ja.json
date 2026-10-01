@@ -1,5 +1,8 @@
 {
-  "app": { "name": "weaponx", "tagline": "資料のつながりと最新版が分かる" },
+  "app": {
+    "name": "weaponx",
+    "tagline": "資料のつながりと最新版が分かる"
+  },
   "common": {
     "close": "閉じる",
     "cancel": "キャンセル",
@@ -97,5 +100,100 @@
   "table": {
     "open": "開く",
     "sortBy": "{{column}}で並べ替え"
+  },
+  "roles": {
+    "owner": "オーナー",
+    "editor": "編集者",
+    "viewer": "閲覧者"
+  },
+  "kinds": {
+    "google_doc": "ドキュメント",
+    "google_slides": "スライド",
+    "google_sheets": "スプレッドシート",
+    "pdf": "PDF",
+    "other": "その他"
+  },
+  "home": {
+    "title": "案件",
+    "searchPlaceholder": "参加中の案件の資料を検索",
+    "searchLabel": "資料を検索",
+    "clearSearch": "検索を消去",
+    "createProject": "+ 案件を作る",
+    "columns": {
+      "name": "案件名",
+      "role": "自分の役割",
+      "documentCount": "資料数",
+      "lastActivity": "最終更新",
+      "document": "資料名",
+      "project": "案件",
+      "kind": "種別",
+      "updated": "更新"
+    },
+    "resultsHeading": "「{{q}}」の検索結果 {{count}}件",
+    "noResults": "「{{q}}」に一致する資料はありません",
+    "truncated": "50件以上あります。語を足して絞り込んでください。",
+    "olderBadge": "旧版",
+    "emptyTitle": "まだ参加している案件がありません",
+    "emptyHint": "招待されると、ここに案件が表示されます"
+  },
+  "createProject": {
+    "title": "案件を作る",
+    "nameLabel": "案件名",
+    "submit": "作成",
+    "created": "案件を作成しました"
+  },
+  "project": {
+    "back": "← ホーム",
+    "members": "メンバー {{count}}人",
+    "menu": "案件のメニュー",
+    "rename": "案件名を変更",
+    "delete": "案件を削除",
+    "filterPlaceholder": "資料名で絞り込み",
+    "filterLabel": "資料名で絞り込み",
+    "kindLabel": "種別",
+    "kindAll": "すべて",
+    "count": "{{count}}件",
+    "columns": {
+      "name": "資料名",
+      "kind": "種別",
+      "updated": "更新",
+      "registeredBy": "登録した人"
+    },
+    "olderVersions": "旧版 {{count}}件",
+    "moreTags": "+{{count}}",
+    "emptyTitle": "まだ資料がありません",
+    "emptyViewer": "まだ資料がありません。編集者が資料を追加すると、ここに並びます。",
+    "filteredEmpty": "条件に合う資料がありません",
+    "clearFilters": "絞り込みを解除",
+    "loadFailed": "資料を読み込めませんでした",
+    "notFound": "この案件は見つからないか、参加していません",
+    "renameTitle": "案件名を変更",
+    "renameSubmit": "保存",
+    "renamed": "案件名を変更しました",
+    "deleteTitle": "案件を削除",
+    "deleteMessage": "『{{name}}』を削除します。資料の記録は一覧と検索から消えます。元の場所にあるファイルは消えません。",
+    "deleteConfirm": "削除",
+    "deleted": "案件を削除しました",
+    "emptyHint": "ここから資料を作るか、既にある資料のリンクを登録できます"
+  },
+  "panel": {
+    "label": "資料の詳細",
+    "close": "閉じる",
+    "open": "開く",
+    "versionNo": "v{{n}}",
+    "versions": "版",
+    "references": "参考資料",
+    "referencedBy": "この資料を参考にした資料",
+    "none": "なし",
+    "overview": {
+      "modified": "更新",
+      "registeredBy": "登録した人",
+      "changeNote": "変更メモ"
+    },
+    "usesVersion": "この資料の v{{n}} を参考",
+    "noAccess": "見る権限のない資料",
+    "deleted": "削除された資料",
+    "projectSuffix": "({{project}})",
+    "versionLatest": "v{{n}}(最新)"
   }
 }

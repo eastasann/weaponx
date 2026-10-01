@@ -42,6 +42,7 @@ describe("翻訳ファイル", () => {
               ]
           : vars(value, `${prefix}${key}.`),
       );
-    expect(vars(ja)).toEqual(vars(en));
+    const byKey = (a: [string, string], b: [string, string]) => a[0].localeCompare(b[0]);
+    expect(vars(ja).sort(byKey)).toEqual(vars(en).sort(byKey));
   });
 });

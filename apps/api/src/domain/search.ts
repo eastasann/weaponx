@@ -1,4 +1,4 @@
-import { LIMITS, normalizeKey } from "@weaponx/shared";
+import { type DocumentKind, LIMITS, normalizeKey } from "@weaponx/shared";
 import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import * as t from "../db/schema";
@@ -24,7 +24,7 @@ export type SearchResult = {
   projectId: string;
   projectName: string;
   name: string;
-  kind: string;
+  kind: DocumentKind;
   url: string;
   modifiedAt: string;
   isLatest: boolean;
@@ -78,7 +78,7 @@ export type ReferenceCandidate = {
   projectId: string;
   projectName: string;
   name: string;
-  kind: string;
+  kind: DocumentKind;
 };
 
 /**
