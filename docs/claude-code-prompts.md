@@ -69,7 +69,7 @@ docs/02-01_system-design-doc.md の ADR-002・ADR-005・ADR-018・ADR-020・ADR-
 
 ## Step 2: DB スキーマ + シード
 
-Status:
+Status: done 2026-10-01
 
 ```
 docs/02-01_system-design-doc.md の6章「データモデル」のスキーマを実装し、

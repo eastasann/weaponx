@@ -296,7 +296,7 @@ Google のアクセストークン(1時間有効)だけは、インスタンス�
 - すべてのレスポンスに `X-Request-Id` を付ける(8章)。ただし Cloud Armor が返す 429 は LB が応答するので付かない
 - 一覧はページ分けしない(design-spec 1.2)。検索と候補だけ件数の上限を持つ
 - エラーの形式とコードは8章。入力の上限(値は design-spec 6.0.3)と正規化は `packages/shared` の定数・関数にし、API と画面で共有する
-- 「ドライブの資料」は、URL からドライブのファイル ID を取り出せる資料(`docs.google.com/{document,presentation,spreadsheets}/d/{id}`、`drive.google.com/file/d/{id}`。ドライブ上の PDF 等を含む)。資料名と更新日時の自動取得・重複の判定(`link_key`)・メタデータの取り直しの対象になる(design-spec 6.0.4・6.1・6.2)
+- 「ドライブの資料」は、URL からドライブのファイル ID を取り出せる資料(`docs.google.com/{document,presentation,spreadsheets}/d/{id}`、`drive.google.com/file/d/{id}`。ドライブ上の PDF 等を含む。複数アカウントのログイン中に付く `/u/{n}/` は同じファイルとして扱い、「ウェブに公開」のリンク `/d/e/{...}` はファイル ID でないので含めない)。資料名と更新日時の自動取得・重複の判定(`link_key`)・メタデータの取り直しの対象になる(design-spec 6.0.4・6.1・6.2)
 - 以下の型の記法は TypeScript。`?` は省略可、`| null` は値が無いことがある
 
 共通の型:

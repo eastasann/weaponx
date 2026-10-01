@@ -20,7 +20,7 @@ setup:
 	$(COMPOSE) build
 	$(TOOLS_NODEPS) bun install
 	$(MAKE) tokens
-	@if [ -f apps/api/scripts/migrate.ts ]; then $(MAKE) db-migrate db-seed; fi
+	$(MAKE) db-migrate db-seed
 	git config core.hooksPath .githooks
 
 dev:

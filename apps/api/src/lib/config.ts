@@ -17,6 +17,7 @@ const ConfigSchema = Type.Object({
     Type.Literal("error"),
   ]),
   APP_VERSION: Type.String({ minLength: 1 }),
+  DATABASE_URL: Type.String({ pattern: "^postgres(ql)?://.+" }),
   DEV_LOGIN_ENABLED: Bool,
   DRIVE_MODE: Type.Union([Type.Literal("mock"), Type.Literal("google")]),
 });
@@ -26,6 +27,7 @@ export type Config = {
   port: number;
   logLevel: Static<typeof ConfigSchema>["LOG_LEVEL"];
   appVersion: string;
+  databaseUrl: string;
   devLoginEnabled: boolean;
   driveMode: Static<typeof ConfigSchema>["DRIVE_MODE"];
 };
@@ -40,6 +42,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     PORT: env.PORT ?? "3000",
     LOG_LEVEL: env.LOG_LEVEL ?? "info",
     APP_VERSION: env.APP_VERSION ?? "dev",
+    DATABASE_URL: env.DATABASE_URL ?? "",
     DEV_LOGIN_ENABLED: env.DEV_LOGIN_ENABLED || "false",
     DRIVE_MODE: env.DRIVE_MODE || "mock",
   };
@@ -56,6 +59,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     port: Number(input.PORT),
     logLevel: input.LOG_LEVEL as Config["logLevel"],
     appVersion: input.APP_VERSION,
+    databaseUrl: input.DATABASE_URL,
     devLoginEnabled: input.DEV_LOGIN_ENABLED === "true",
     driveMode: input.DRIVE_MODE as Config["driveMode"],
   };

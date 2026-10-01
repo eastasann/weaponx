@@ -10,6 +10,11 @@
   "dependencies": {
     "@sinclair/typebox": "^0.34.0",
     "@weaponx/shared": "workspace:*",
-    "elysia": "^1.4.0"
+    "elysia": "^1.4.0",
+    "drizzle-orm": "^0.44.0",
+    "postgres": "^3.4.0"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.0"
   }
 }
