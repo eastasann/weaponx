@@ -38,9 +38,13 @@ export type SeriesRow = {
   searchNames: string[];
 };
 
+/**
+ * `referenceId` は参考資料の向き(`references`)の行にだけ付く。資料の ID ではなく、
+ * 版の編集で引き継ぎ・取り消しの対象を指すための行の識別子(02-01 5.5)
+ */
 export type RelatedItem =
-  | { visibility: "no_access" }
-  | { visibility: "deleted" }
+  | { visibility: "no_access"; referenceId?: string }
+  | { visibility: "deleted"; referenceId?: string }
   | {
       visibility: "visible";
       documentId: string;
@@ -314,6 +318,7 @@ async function listReferences(
 ): Promise<RelatedItem[]> {
   const rows = await db
     .select({
+      referenceId: t.documentReferences.id,
       documentId: t.documents.id,
       seriesId: t.documents.seriesId,
       projectId: t.documents.projectId,
@@ -342,8 +347,12 @@ async function listReferences(
   );
   return sortRelated(
     rows.map((row): RelatedItem => {
-      if (row.memberUserId === null) return { visibility: "no_access" };
-      if (row.deletedAt || row.projectDeletedAt) return { visibility: "deleted" };
+      if (row.memberUserId === null) {
+        return { visibility: "no_access", referenceId: row.referenceId };
+      }
+      if (row.deletedAt || row.projectDeletedAt) {
+        return { visibility: "deleted", referenceId: row.referenceId };
+      }
       return {
         visibility: "visible",
         documentId: row.documentId,

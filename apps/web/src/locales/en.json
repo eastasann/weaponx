@@ -8,7 +8,8 @@
     "cancel": "Cancel",
     "documentCount_one": "{{count}} document",
     "documentCount_other": "{{count}} documents",
-    "loading": "Loading"
+    "loading": "Loading",
+    "noValue": "─"
   },
   "header": {
     "userMenu": "User menu",
@@ -204,7 +205,9 @@
     "actions": "Actions",
     "newVersion": "Create new version",
     "copy": "Create from this",
-    "deleteVersion": "Delete this version"
+    "deleteVersion": "Delete this version",
+    "registerVersion": "Register new version",
+    "edit": "Edit details"
   },
   "filePicker": {
     "title": "Choose a Drive file",
@@ -267,5 +270,105 @@
     "message": "Delete \"{{name}}\" (v{{n}}). It is removed from the app's records. The file in its original location is not deleted.",
     "seriesDeleted": "Document deleted",
     "deleted": "Version deleted"
+  },
+  "tags": {
+    "label": "Tags",
+    "placeholder": "Type and press Enter",
+    "candidates": "Tag suggestions",
+    "remove": "Remove tag {{name}}",
+    "limit": "You can add up to {{max}} tags"
+  },
+  "registerVersion": {
+    "title": "Register a new version",
+    "submit": "Register",
+    "registered": "Registered a new version"
+  },
+  "editDocument": {
+    "title": "Edit details",
+    "submit": "Save",
+    "saved": "Saved the details",
+    "lockedNote": "The name from Drive is used. Change the name in Drive."
+  },
+  "members": {
+    "title": "Members",
+    "back": "← {{name}}",
+    "invite": "+ Invite member",
+    "columns": {
+      "name": "Name",
+      "email": "Email",
+      "role": "Role",
+      "addedAt": "Added"
+    },
+    "self": "(you)",
+    "suspended": "(suspended)",
+    "neverLoggedIn": "(never signed in)",
+    "remove": "Remove",
+    "disabledNote": "* Disabled: {{reason}}",
+    "roleSelect": "Role of {{name}}",
+    "changed": "Changed the role",
+    "removed": "Removed the member",
+    "invited": "Invited the member",
+    "selfDemoteTitle": "Change your role",
+    "selfDemoteMessage": "If you change your role to {{role}}, you can no longer manage members.",
+    "selfDemoteConfirm": "Change",
+    "removeTitle": "Remove member",
+    "removeMessage": "Remove {{name}} from this project.",
+    "removeSelfMessage": "Remove yourself from this project. You will no longer be able to see it.",
+    "removeConfirm": "Remove",
+    "inviteTitle": "Invite member",
+    "inviteSearch": "Search by name or email",
+    "inviteRole": "Role",
+    "inviteSubmit": "Invite",
+    "candidates": "Users you can invite",
+    "noCandidates": "No matching users. Ask an administrator to add users.",
+    "moreCandidates": "There are many matches. Add more words to narrow them down",
+    "desktopOnly": "Open this screen on a computer"
+  },
+  "adminUsers": {
+    "title": "Users",
+    "add": "+ Add user",
+    "filterLabel": "Filter by name or email",
+    "filterPlaceholder": "Filter by name or email",
+    "columns": {
+      "name": "Name",
+      "email": "Email",
+      "role": "Role",
+      "status": "Status",
+      "lastLogin": "Last sign-in"
+    },
+    "globalRoles": {
+      "admin": "Administrator",
+      "member": "Member"
+    },
+    "statuses": {
+      "active": "Active",
+      "suspended": "Suspended"
+    },
+    "neverLoggedIn": "(never signed in)",
+    "self": "(you)",
+    "noLogin": "─",
+    "menu": "Actions for {{name}}",
+    "suspend": "Suspend",
+    "resume": "Resume",
+    "makeAdmin": "Make administrator",
+    "removeAdmin": "Remove administrator",
+    "selfNote": "* Disabled: you cannot change yourself",
+    "filteredEmpty": "No users match the filter",
+    "suspended": "Suspended the user",
+    "resumed": "Resumed the user",
+    "adminGranted": "Made the user an administrator",
+    "adminRevoked": "Removed administrator rights",
+    "suspendTitle": "Suspend user",
+    "suspendMessage": "Suspend {{email}}. This person will no longer be able to sign in.",
+    "soleOwner": "This person is the only owner of {{count}} project(s). If you suspend them, no one can invite members, change roles, remove members, rename the project, or delete the project there.",
+    "soleOwnerFailed": "Could not check the projects this person solely owns.",
+    "suspendConfirm": "Suspend",
+    "addTitle": "Add user",
+    "email": "Email address",
+    "emailInvalid": "The email address is not valid",
+    "asAdmin": "Make administrator",
+    "addSubmit": "Add",
+    "added": "Added the user",
+    "noPermission": "You do not have permission to open this screen"
   }
 }

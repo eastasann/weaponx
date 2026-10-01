@@ -20,7 +20,12 @@ export type ReferenceChip =
       /** 同じ案件の資料は null */
       projectName: string | null;
     }
-  | { key: string; visibility: "no_access" | "deleted" };
+  | {
+      key: string;
+      visibility: "no_access" | "deleted";
+      /** 版の登録・編集で、この参考資料を引き継ぐ・外す対象を指す(02-01 5.5)。無い場合は引き継げない */
+      referenceId?: string;
+    };
 
 type Props = {
   projectId: string;

@@ -1,46 +1,17 @@
-import { expect, type Page, test } from "@playwright/test";
-import { devLogin, expectHeaderUser } from "./helpers";
+import { expect, test } from "@playwright/test";
+import {
+  addButton,
+  addDialog,
+  createDocument,
+  createProject,
+  devLogin,
+  panel,
+  registerByLink,
+  startInNewProject,
+} from "./helpers";
 
 // コアフロー「作る・記録する」(design-spec 2.2、6.2、6.3)。
 // 作ったものが他のテストのデータ(シードの件数・並び)を変えないよう、各テストは自分の案件の中で操作する
-
-async function createProject(page: Page, name: string) {
-  await page.getByRole("button", { name: "+ 案件を作る" }).click();
-  await page.getByRole("textbox", { name: "案件名" }).fill(name);
-  await page.getByRole("button", { name: "作成" }).click();
-  await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
-}
-
-async function startInNewProject(page: Page, name: string, user = "山田 太郎") {
-  await devLogin(page, user);
-  await expectHeaderUser(page, user);
-  await createProject(page, name);
-}
-
-const addButton = (page: Page) => page.getByRole("button", { name: "+ 資料を追加" }).first();
-const addDialog = (page: Page) => page.getByRole("dialog", { name: "資料を追加" });
-const panel = (page: Page) => page.getByRole("region", { name: "資料の詳細" });
-
-/** 「新しく作る」でドキュメントを1つ作る。編集画面の別タブはここでは見ない */
-async function createDocument(page: Page, name: string, kind = "google_doc") {
-  await addButton(page).click();
-  const dialog = addDialog(page);
-  await dialog.getByRole("combobox", { name: "種別" }).selectOption(kind);
-  await dialog.getByRole("textbox", { name: "資料名" }).fill(name);
-  await dialog.getByRole("button", { name: "作成" }).click();
-  await expect(panel(page).getByRole("heading", { name })).toBeVisible();
-}
-
-/** 「リンクで登録」で資料を1つ登録する(アプリがまだ使えないファイルの手入力の名前で登録できる) */
-async function registerByLink(page: Page, url: string, name: string) {
-  await addButton(page).click();
-  const dialog = addDialog(page);
-  await dialog.getByRole("tab", { name: "リンクで登録" }).click();
-  await dialog.getByRole("textbox", { name: "リンク" }).fill(url);
-  await dialog.getByRole("textbox", { name: "資料名" }).fill(name);
-  await dialog.getByRole("button", { name: "追加" }).click();
-  await expect(panel(page).getByRole("heading", { name })).toBeVisible();
-}
 
 const GUIDANCE =
   "ドライブのファイル選択画面で選ぶと、アプリで資料名を読んだりコピーしたりできます。";

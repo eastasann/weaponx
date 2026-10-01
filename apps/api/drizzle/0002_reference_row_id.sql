@@ -1,0 +1,2 @@
+ALTER TABLE "document_references" ADD COLUMN "id" uuid DEFAULT gen_random_uuid() NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "document_references_id_key" ON "document_references" USING btree ("id");

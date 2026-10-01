@@ -40,7 +40,10 @@ const RegisterBody = t.Object({
 });
 const VersionBody = t.Composite([
   RegisterBody,
-  t.Object({ changeNote: t.Optional(Nullable(t.String())) }),
+  t.Object({
+    changeNote: t.Optional(Nullable(t.String())),
+    hiddenReferenceIds: t.Optional(t.Array(t.String())),
+  }),
 ]);
 const NewDocumentBody = t.Object({
   kind: t.String(),
@@ -61,6 +64,7 @@ const UpdateBody = t.Object({
   changeNote: t.Optional(Nullable(t.String())),
   tags: t.Optional(t.Array(t.String())),
   referenceIds: t.Optional(t.Array(t.String())),
+  hiddenReferenceIds: t.Optional(t.Array(t.String())),
 });
 
 /** 検索語と候補の語(入力の検証は認可の後。02-01 7章の判定の順) */

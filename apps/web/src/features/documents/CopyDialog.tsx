@@ -41,8 +41,8 @@ type Props = {
     documentId: string;
     editUrl: string;
   }) => void;
-  /** 「このリンクで登録」(これを元に作るで、追加先が今の案件のときだけ。design-spec 6.0.8) */
-  onRegisterByLink: (failure: CreatedNotRegistered, name: string) => void;
+  /** 「このリンクで登録」(新しい版を作る、または追加先が今の案件のこれを元に作る。design-spec 6.0.8) */
+  onRegisterByLink: (failure: CreatedNotRegistered, name: string, changeNote: string) => void;
 };
 
 /** 作成ダイアログ(design-spec 6.3)。元の資料をドライブ上でコピーして、新しいファイルを作る */
@@ -229,11 +229,15 @@ export function CopyDialog({
             >
               {t("addDocument.openCreatedFile")}
             </a>
-            {mode === "copy" && target === projectId && (
+            {(mode === "newVersion" || target === projectId) && (
               <Button
                 className="self-start"
                 onClick={() =>
-                  onRegisterByLink(createdFailure, nameResult.ok ? nameResult.value : name)
+                  onRegisterByLink(
+                    createdFailure,
+                    nameResult.ok ? nameResult.value : name,
+                    noteResult.ok ? noteResult.value : changeNote,
+                  )
                 }
               >
                 {t("addDocument.registerByLink")}

@@ -7,7 +7,8 @@
     "close": "閉じる",
     "cancel": "キャンセル",
     "documentCount_other": "{{count}}件",
-    "loading": "読み込み中"
+    "loading": "読み込み中",
+    "noValue": "─"
   },
   "header": {
     "userMenu": "ユーザーメニュー",
@@ -199,7 +200,9 @@
     "actions": "操作",
     "newVersion": "新しい版を作る",
     "copy": "これを元に作る",
-    "deleteVersion": "この版を削除"
+    "deleteVersion": "この版を削除",
+    "registerVersion": "新しい版を登録",
+    "edit": "登録内容を編集"
   },
   "filePicker": {
     "title": "ドライブのファイルを選ぶ",
@@ -262,5 +265,105 @@
     "message": "『{{name}}』(v{{n}})を削除します。アプリの記録から消えます。元の場所にあるファイルは消えません。",
     "seriesDeleted": "資料を削除しました",
     "deleted": "版を削除しました"
+  },
+  "tags": {
+    "label": "タグ",
+    "placeholder": "入力して Enter で確定",
+    "candidates": "タグの候補",
+    "remove": "タグ {{name}} を外す",
+    "limit": "タグは{{max}}件まで付けられます"
+  },
+  "registerVersion": {
+    "title": "新しい版を登録",
+    "submit": "登録",
+    "registered": "新しい版を登録しました"
+  },
+  "editDocument": {
+    "title": "登録内容を編集",
+    "submit": "保存",
+    "saved": "登録内容を保存しました",
+    "lockedNote": "ドライブの名前を使います。名前はドライブで変更してください。"
+  },
+  "members": {
+    "title": "メンバー",
+    "back": "← {{name}}",
+    "invite": "+ メンバーを招待",
+    "columns": {
+      "name": "名前",
+      "email": "メール",
+      "role": "役割",
+      "addedAt": "追加日"
+    },
+    "self": "(自分)",
+    "suspended": "(停止中)",
+    "neverLoggedIn": "(未ログイン)",
+    "remove": "外す",
+    "disabledNote": "※ 無効: {{reason}}",
+    "roleSelect": "{{name}}の役割",
+    "changed": "役割を変更しました",
+    "removed": "メンバーを外しました",
+    "invited": "メンバーを招待しました",
+    "selfDemoteTitle": "自分の役割を変更",
+    "selfDemoteMessage": "自分の役割を{{role}}に変えると、メンバーの管理ができなくなります。",
+    "selfDemoteConfirm": "変更する",
+    "removeTitle": "メンバーを外す",
+    "removeMessage": "{{name}}をこの案件から外します。",
+    "removeSelfMessage": "自分をこの案件から外します。この案件を見られなくなります。",
+    "removeConfirm": "外す",
+    "inviteTitle": "メンバーを招待",
+    "inviteSearch": "名前またはメールで検索",
+    "inviteRole": "役割",
+    "inviteSubmit": "招待",
+    "candidates": "招待できる利用者",
+    "noCandidates": "該当する利用者がいません。利用者の追加は管理者に依頼してください。",
+    "moreCandidates": "候補が多いため、語を足して絞り込んでください",
+    "desktopOnly": "この画面はパソコンで開いてください"
+  },
+  "adminUsers": {
+    "title": "利用者管理",
+    "add": "+ 利用者を追加",
+    "filterLabel": "名前・メールで絞り込み",
+    "filterPlaceholder": "名前・メールで絞り込み",
+    "columns": {
+      "name": "名前",
+      "email": "メール",
+      "role": "ロール",
+      "status": "状態",
+      "lastLogin": "最終ログイン"
+    },
+    "globalRoles": {
+      "admin": "管理者",
+      "member": "一般"
+    },
+    "statuses": {
+      "active": "有効",
+      "suspended": "停止"
+    },
+    "neverLoggedIn": "(未ログイン)",
+    "self": "(自分)",
+    "noLogin": "─",
+    "menu": "{{name}}の操作",
+    "suspend": "停止",
+    "resume": "再開",
+    "makeAdmin": "管理者にする",
+    "removeAdmin": "管理者から外す",
+    "selfNote": "※ 無効: 自分自身は変更できません",
+    "filteredEmpty": "条件に合う利用者がいません",
+    "suspended": "利用者を停止しました",
+    "resumed": "利用者を再開しました",
+    "adminGranted": "管理者にしました",
+    "adminRevoked": "管理者から外しました",
+    "suspendTitle": "利用者を停止",
+    "suspendMessage": "{{email}}を停止します。この人はログインできなくなります。",
+    "soleOwner": "この人が唯一のオーナーになっている案件が {{count}} 件あります。停止すると、その案件ではメンバーの招待・役割の変更・外す、案件名の変更、案件の削除ができなくなります。",
+    "soleOwnerFailed": "唯一のオーナーの案件数を確認できませんでした。",
+    "suspendConfirm": "停止",
+    "addTitle": "利用者を追加",
+    "email": "メールアドレス",
+    "emailInvalid": "メールアドレスの形式が正しくありません",
+    "asAdmin": "管理者にする",
+    "addSubmit": "追加",
+    "added": "利用者を追加しました",
+    "noPermission": "この画面を開く権限がありません"
   }
 }

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AdminUsersPage } from "../features/admin/AdminUsersPage";
 
-/** 利用者管理 A1(02-01 4章)。画面の中身は Step 10 */
+/** 利用者管理 A1(02-01 4章) */
 export const Route = createFileRoute("/_app/admin/users")({
-  component: () => <main className="flex-1" />,
+  component: AdminUsersPage,
 });

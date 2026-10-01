@@ -340,8 +340,8 @@ type SeriesRow = {
 };
 
 type RelatedItem =
-  | { visibility: "no_access" }          // 規則1。名前・案件名・版番号を返さない
-  | { visibility: "deleted" }            // 規則2。同上
+  | { visibility: "no_access"; referenceId?: Uuid }  // 規則1。名前・案件名・版番号を返さない
+  | { visibility: "deleted"; referenceId?: Uuid }    // 規則2。同上
   | {
       visibility: "visible";             // 規則3・4
       documentId: Uuid;                  // 押したときに開く版
@@ -474,6 +474,7 @@ type ProjectRow = {
 ```
 
 - `documentId` を省くと最新版。指定した版が削除済み・別の系列なら 404 `DOCUMENT_NOT_FOUND`
+- `references` の `no_access`・`deleted` の行には `referenceId`(`document_references.id`)を付ける。資料の ID とは無関係な乱数で、資料を特定できない。画面が版の登録・編集で、見えない参考資料を引き継ぐ・外す対象を指すのに使う(`hiddenReferenceIds`)。`referencedBy` の行には付けない
 - `references`・`referencedBy` は design-spec 6.1 の並び順の区分(同じ案件・他の案件・`no_access`・`deleted`)の順で返す。区分の中の名前順は、画面が表示言語の辞書順で並べる(design-spec 1.2)
 - `referencedBy` に入る系列は6章「導出する値」の「この資料を参考にした資料」
 
@@ -517,14 +518,16 @@ type ProjectRow = {
   "kind": "google_slides",
   "sourceModifiedAt": null,
   "changeNote": "A社の指摘を反映",
-  "referenceIds": ["<documentId>"]
+  "referenceIds": ["<documentId>"],
+  "hiddenReferenceIds": ["<referenceId>"]
 }
 ```
 
 → 201 `{ "series": SeriesRow, "document": Version, "driveStatus": "active" }`
 
 - ドライブの資料の取り直し、取り直せないときの扱い、応答の `driveStatus` は `POST /api/projects/:projectId/documents` と同じ
-- `referenceIds` は、画面が最新版の参考資料を初期値として入れた後の最終形。新しく足したものだけを検証する(design-spec 6.0.3)
+- `referenceIds` は、画面が最新版の参考資料を初期値として入れた後の最終形(見える参考資料)。新しく足したものだけを検証する(design-spec 6.0.3)
+- `hiddenReferenceIds` は、最新版から引き継ぐ見えない参考資料(5.5 の `references` の `referenceId`)。送らなかった行は引き継がない。いまの最新版が持つ行だけを扱い、見つからない行(画面を開いた後に外された行を含む)は黙って落とす。見える参考資料と合わせた件数が design-spec 6.0.3 の上限を超えたら 422 `VALIDATION_FAILED`(`fields.referenceIds = too_many`)。形式が UUID でなければ `fields.hiddenReferenceIds = invalid_format`
 
 **`POST /api/series/:seriesId/versions/copy`**(編集者以上。新しい版を作る)
 
@@ -557,13 +560,14 @@ type ProjectRow = {
   "sourceModifiedAt": "2026-09-19T15:00:00Z",
   "changeNote": "図表を差し替え",
   "tags": ["提出", "確定"],
-  "referenceIds": ["<documentId>"]
+  "referenceIds": ["<documentId>"],
+  "hiddenReferenceIds": ["<referenceId>"]
 }
 ```
 
 → 200 `{ "series": SeriesRow, "document": Version, "driveStatus": "active" }`
 
-- 送った項目だけを変える。`tags` と `referenceIds` は最終形の一式を送る(design-spec 6.0.6)。応答の `driveStatus` は、リンクを変えないときも付ける(今の連携の状態)。DB への書き方は6章 document_tags の規則
+- 送った項目だけを変える。`tags` と `referenceIds` は最終形の一式を送る(design-spec 6.0.6)。`referenceIds` を送ったときは、見えない参考資料のうち残すものを `hiddenReferenceIds`(`referenceId` の一式)で一緒に送る。送らなかった行は外れる。この版の行だけを扱い、すでに無い行は黙って落とす。見える参考資料と合わせた件数の上限と形式の不備は `POST .../versions` と同じ。`referenceIds` を送らなければ参考資料は変わらない(`hiddenReferenceIds` だけを送ったら 422 `VALIDATION_FAILED`、`fields.referenceIds = required`)。応答の `driveStatus` は、リンクを変えないときも付ける(今の連携の状態)。DB への書き方は6章 document_tags の規則
 - `nameLocked` の版で `name`・`sourceModifiedAt` を送ったら 422 `VALIDATION_FAILED`(`url` を変えた場合を除く。design-spec 6.5.6)。`url` を変えたら `metadata_fetched_at` を空にし、ドライブの資料(5.1)で取り直せたら入れる(取り直せないときの扱いは `POST /api/projects/:projectId/documents` と同じ)
 - 削除済みの版は 404 `DOCUMENT_NOT_FOUND`
 
@@ -720,6 +724,7 @@ erDiagram
 | `documents.project_id` を追加(系列の案件の写し。変わらない) | リンクの重複を部分一意インデックスで守るため(ADR-013) |
 | `documents.link_key` を追加 | 重複の比べ方(design-spec 6.0.4)を1つの値にする。ドライブの資料(5.1)は `g:{google_file_id}`、それ以外は `u:{前後の空白を除いた URL}` |
 | `documents.name_key` を追加 | 検索と絞り込みの正規化(NFKC + 小文字)。design-spec 6.1・6.4「大文字・小文字、全角・半角の英数字は区別しない」 |
+| `document_references.id` を追加(乱数) | 見る権限のない・削除された参考資料は資料の ID を返さないので、画面が版の登録・編集で引き継ぎ・取り消しの対象を指すのに使う(5.5 の `hiddenReferenceIds`) |
 | `drive_connections.credentials` の中身を決定 | リフレッシュトークンだけを AES-256-GCM で暗号化(ADR-012) |
 
 ### スキーマ(Drizzle ORM)
@@ -903,6 +908,9 @@ export const documents = pgTable(
 export const documentReferences = pgTable(
   "document_references",
   {
+    // 参考資料の行の識別子。見る権限のない・削除された資料は資料の ID を返さないので、
+    // 画面が引き継ぎと取り消しの対象を指すのに使う(資料の ID とは無関係な乱数)
+    id: uuid("id").notNull().defaultRandom(),
     documentId: uuid("document_id")
       .notNull()
       .references(() => documents.id),
@@ -916,6 +924,7 @@ export const documentReferences = pgTable(
   },
   (t) => [
     primaryKey({ columns: [t.documentId, t.referencedDocumentId] }),
+    uniqueIndex("document_references_id_key").on(t.id),
     index("document_references_referenced_idx").on(t.referencedDocumentId),
     check("document_references_not_self", sql`${t.documentId} <> ${t.referencedDocumentId}`),
   ],
@@ -966,6 +975,7 @@ export const documentTags = pgTable(
 - document_references
   - 同じ系列の版どうしは参考資料にできない(design-spec 6.5.5・6.5.6)。新しく選んだ参考資料が同じ系列の版なら `REFERENCE_UNAVAILABLE`(`details.documentIds` にその版の ID)。件数の上限は design-spec 6.0.3
   - 参考資料の版やその案件が削除済みになっても行は残し、`RelatedItem` の `deleted` として返す
+  - 行の識別子 `id`(乱数)を持つ。見えない参考資料の行を画面が指すためのもので、資料の ID は返さない(5.5)
 - document_tags
   - 件数の上限と重複の判定は design-spec 6.0.3(`label_key` が同じなら重複)
   - 保存は、送られた一式と今の行を `label_key` で比べ、無くなったタグの行を消し、増えたタグの行を足す。残るタグで `label` の表記が変わっていれば `label` だけを書き換える(`position` は保つ)。足す行の `position` は、その版の今の最大値(消すタグを消す前の値)+ 1 から、送られた一式の順に振る。残るタグの行は触らない(付けた順を保つ)
@@ -1027,7 +1037,7 @@ export const documentTags = pgTable(
 - 不参加・削除済みの案件は 404 `PROJECT_NOT_FOUND`(403 にしない。案件があるかどうかを漏らさない。design-spec 6.0.2「理由は区別しない」)
 - 系列・版の ID で呼ぶエンドポイントは、その系列の案件で上の表を当てる。判定の順: 系列・版が存在しない → 404 `DOCUMENT_NOT_FOUND`。存在するがその案件に参加していない・案件が削除済み → 404 `PROJECT_NOT_FOUND`。参加しているが系列・版が削除済み → 404 `DOCUMENT_NOT_FOUND`。役割が足りない → 403 `ROLE_INSUFFICIENT`
 - 判定の順は、認証(401)、案件・系列の存在と参加(404)、役割(403)、入力の検証(422)。ドライブを使う操作は、役割の後、入力の検証の前に連携の状態を確かめる(要再連携は 409 `DRIVE_REAUTH_REQUIRED`)。本文とクエリの型の不一致(必須項目の欠落、型違い)は Elysia のスキーマ検証が認可より先に拾うので 422 になりうる(案件があるかどうかは漏れない)
-- 参考資料・参考にした資料(`RelatedItem`)で `no_access`・`deleted` の行は、名前・案件名・版番号・ID を返さない
+- 参考資料・参考にした資料(`RelatedItem`)で `no_access`・`deleted` の行は、名前・案件名・版番号・資料の ID を返さない(参考資料の向きの行には、資料と無関係な行の識別子 `referenceId` だけを付ける。5.5)
 - 参考資料として新しく選べるのは、参加している、削除されていない案件の、削除されていない版だけ(`REFERENCE_UNAVAILABLE`)
 
 #### その他の設計判断

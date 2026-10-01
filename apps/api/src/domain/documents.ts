@@ -44,6 +44,40 @@ export function readReferenceIds(fields: FieldCollector, raw: readonly string[])
   return ids;
 }
 
+/** 引き継ぐ・残す参考資料の行の識別子(`RelatedItem.referenceId`)。形式の不備は `invalid_format` */
+export function readHiddenReferenceIds(fields: FieldCollector, raw: readonly string[]): string[] {
+  if (raw.some((id) => !isUuid(id))) {
+    fields.reject("hiddenReferenceIds", "invalid_format");
+    return [];
+  }
+  return [...new Set(raw.map((id) => id.toLowerCase()))];
+}
+
+/**
+ * 行の識別子から参考資料の資料 ID に戻す。`seriesId` の系列の版が持つ行だけを引く(他の系列の行は
+ * 資料の ID を漏らすので扱わない)。画面を開いた後に消えた行は黙って落とす
+ */
+async function resolveReferenceRows(
+  tx: DbOrTx,
+  seriesId: string,
+  handles: string[],
+): Promise<string[]> {
+  if (handles.length === 0) return [];
+  const rows = await tx
+    .select({ id: t.documentReferences.referencedDocumentId })
+    .from(t.documentReferences)
+    .innerJoin(t.documents, eq(t.documents.id, t.documentReferences.documentId))
+    .where(and(eq(t.documents.seriesId, seriesId), inArray(t.documentReferences.id, handles)));
+  return rows.map((row) => row.id);
+}
+
+/** 参考資料の件数の上限(design-spec 6.0.3)。見えない参考資料も数える */
+function assertReferenceCount(total: number): void {
+  if (total > LIMITS.referencesPerVersion) {
+    throw validationFailed({ referenceIds: "too_many" });
+  }
+}
+
 /** 変更メモ。空は「なし」(null) */
 export function readChangeNote(
   fields: FieldCollector,
@@ -350,7 +384,11 @@ export async function registerDocument(
   );
 }
 
-type VersionInput = RegisterInput & { changeNote?: string | null };
+type VersionInput = RegisterInput & {
+  changeNote?: string | null;
+  /** 最新版から引き継ぐ、見る権限のない・削除された参考資料の行(`RelatedItem.referenceId`) */
+  hiddenReferenceIds?: string[];
+};
 
 /** 系列の次の版を登録する(`POST /api/series/:seriesId/versions`)。版番号は系列の行ロックで採番する(ADR-013) */
 export async function registerVersion(
@@ -363,6 +401,7 @@ export async function registerVersion(
   const access = await requireSeriesAccess(db, userId, seriesId, "editor");
   const fields = new FieldCollector();
   const referenceIds = readReferenceIds(fields, input.referenceIds ?? []);
+  const hiddenHandles = readHiddenReferenceIds(fields, input.hiddenReferenceIds ?? []);
   const changeNote = readChangeNote(fields, input.changeNote);
   const { link, driveStatus } = await resolveLinkFields(deps, userId, fields, input);
   fields.done();
@@ -392,6 +431,12 @@ export async function registerVersion(
         referenceIds.filter((id) => !inherited.has(id)),
         access.seriesId,
       );
+      // 引き継げるのは、いま最新版が持っている参考資料だけ(画面を開いた後に外された行は戻さない)
+      const kept = (await resolveReferenceRows(tx, access.seriesId, hiddenHandles)).filter((id) =>
+        inherited.has(id),
+      );
+      const allReferenceIds = [...new Set([...referenceIds, ...kept])];
+      assertReferenceCount(allReferenceIds.length);
 
       const [document] = await tx
         .insert(t.documents)
@@ -406,7 +451,7 @@ export async function registerVersion(
         })
         .returning({ id: t.documents.id });
       if (!document) throw new Error("版の登録に失敗しました");
-      await insertReferences(tx, userId, document.id, referenceIds);
+      await insertReferences(tx, userId, document.id, allReferenceIds);
       await touchProject(tx, access.projectId);
       return {
         series: await getSeriesRow(tx, access.projectId, access.seriesId),
@@ -424,7 +469,10 @@ export type UpdateInput = {
   sourceModifiedAt?: string | null;
   changeNote?: string | null;
   tags?: string[];
+  /** 見える参考資料の最終形。送ったときだけ、参考資料を送った一式にする */
   referenceIds?: string[];
+  /** 残す、見る権限のない・削除された参考資料の行(`RelatedItem.referenceId`)。`referenceIds` と一緒に送る */
+  hiddenReferenceIds?: string[];
 };
 
 /**
@@ -448,6 +496,11 @@ export async function updateDocument(
   const fields = new FieldCollector();
   const referenceIds =
     input.referenceIds === undefined ? undefined : readReferenceIds(fields, input.referenceIds);
+  const hiddenHandles = readHiddenReferenceIds(fields, input.hiddenReferenceIds ?? []);
+  // 見えない参考資料の残し方は、見える参考資料の最終形と一緒に決まる
+  if (input.hiddenReferenceIds !== undefined && input.referenceIds === undefined) {
+    fields.reject("referenceIds", "required");
+  }
   const changeNote =
     input.changeNote === undefined ? undefined : readChangeNote(fields, input.changeNote);
   let tags: Tag[] | undefined;
@@ -546,7 +599,9 @@ export async function updateDocument(
 
       if (referenceIds !== undefined) {
         const existing = new Set(await referenceIdsOf(tx, current.id));
-        const next = new Set(referenceIds);
+        const kept = await resolveReferenceRows(tx, current.seriesId, hiddenHandles);
+        const next = new Set([...referenceIds, ...kept.filter((id) => existing.has(id))]);
+        assertReferenceCount(next.size);
         const added = referenceIds.filter((id) => !existing.has(id));
         await assertReferencesAvailable(tx, userId, added, current.seriesId);
         const removed = [...existing].filter((id) => !next.has(id));

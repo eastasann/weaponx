@@ -71,9 +71,9 @@ weaponx/
 │   └── web/                  # React(Vite)
 │       ├── src/
 │       │   ├── routes/       # TanStack Router のルート
-│       │   ├── features/     # layout(ヘッダー・ユーザーメニュー・要再連携の帯)、login、errors。以降のステップで home, project, members, admin
-│       │   ├── components/   # ダイアログ、表、通知、ボタン、レイアウト(P1〜P3)。以降のステップでタグ入力、参考資料の選択
-│       │   ├── lib/          # api.ts(Eden)、errors.ts(エラーの分類)、session-effects.ts(401・停止・要再連携の共通処理)、queries.ts、i18n.ts、locale.ts、format.ts、cookies.ts、reconnect.ts。以降のステップで picker.ts
+│       │   ├── features/     # layout(ヘッダー・ユーザーメニュー・要再連携の帯)、login、errors、home、project(案件・横パネル)、documents(資料の追加・作成・編集のダイアログ、参考資料とタグの入力、ファイル選択)、members、admin
+│       │   ├── components/   # ダイアログ、表、通知、ボタン、レイアウト(P1〜P3)
+│       │   ├── lib/          # api.ts(Eden)、errors.ts(エラーの分類)、session-effects.ts(401・停止・要再連携の共通処理)、queries.ts、i18n.ts、locale.ts、format.ts、cookies.ts、reconnect.ts、google-picker.ts
 │       │   ├── locales/      # ja.json, en.json
 │       │   └── styles/       # tokens.css(生成物)、index.css
 │       ├── test/setup.ts     # 画面の部品のテストの準備(happy-dom。bunfig.toml が読む)

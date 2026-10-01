@@ -29,7 +29,13 @@ import { useIsMobile } from "../../lib/use-media-query";
 import { AddDocumentDialog, type AddDocumentPrefill } from "../documents/AddDocumentDialog";
 import { CopyDialog, type CopySource } from "../documents/CopyDialog";
 import { DeleteVersionDialog } from "../documents/DeleteVersionDialog";
+import { EditDocumentDialog } from "../documents/EditDocumentDialog";
+import {
+  RegisterVersionDialog,
+  type RegisterVersionPrefill,
+} from "../documents/RegisterVersionDialog";
 import { NameDialog } from "./NameDialog";
+import { ProjectNotFound } from "./ProjectNotFound";
 import { SidePanel } from "./SidePanel";
 import { filterSeries, type KindFilter } from "./series-view";
 import { TagBadges } from "./TagBadges";
@@ -52,23 +58,6 @@ export function ProjectPage() {
   if (project.isError) return <LoadError onReload={() => void project.refetch()} />;
 
   return <ProjectView projectId={projectId} project={project.data} />;
-}
-
-function ProjectNotFound() {
-  const { t } = useTranslation();
-  return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-[var(--space-stack-gap)] p-[var(--space-page-gutter)] text-center">
-      <p role="alert" className="typography-section-heading">
-        {t("project.notFound")}
-      </p>
-      <Link
-        to="/"
-        className="typography-label inline-flex h-[var(--size-control)] items-center rounded-[var(--radius-control)] bg-accent px-[var(--space-stack-gap)] text-on-accent hover:bg-accent-hover"
-      >
-        {t("errorPage.toHome")}
-      </Link>
-    </main>
-  );
 }
 
 function ProjectView({
@@ -95,6 +84,8 @@ function ProjectView({
   type DialogState =
     | { type: "add"; prefill?: AddDocumentPrefill }
     | { type: "copy" | "newVersion"; source: CopySource }
+    | { type: "registerVersion"; prefill?: RegisterVersionPrefill }
+    | { type: "edit"; documentId: string }
     | { type: "delete"; version: { id: string; name: string; versionNo: number } };
   const [dialog, setDialog] = useState<DialogState | null>(null);
 
@@ -417,6 +408,10 @@ function ProjectView({
                     type: "delete",
                     version: { id: version.id, name: version.name, versionNo: version.versionNo },
                   });
+                } else if (action === "registerVersion") {
+                  setDialog({ type: "registerVersion" });
+                } else if (action === "edit") {
+                  setDialog({ type: "edit", documentId: version.id });
                 } else {
                   openCopy(action, {
                     documentId: version.id,
@@ -450,25 +445,49 @@ function ProjectView({
           source={dialog.source}
           onClose={() => setDialog(null)}
           onCreated={(result) => afterCopy(dialog.type as "copy" | "newVersion", result)}
-          onRegisterByLink={(failure, name) =>
-            setDialog({
-              type: "add",
-              prefill: {
-                url: failure.url,
-                name,
-                references: [
-                  {
-                    key: dialog.source.documentId,
-                    visibility: "visible",
-                    documentId: dialog.source.documentId,
-                    name: dialog.source.name,
-                    kind: dialog.source.kind,
-                    projectName: null,
+          onRegisterByLink={(failure, name, changeNote) =>
+            dialog.type === "newVersion"
+              ? setDialog({
+                  type: "registerVersion",
+                  prefill: { url: failure.url, name, changeNote },
+                })
+              : setDialog({
+                  type: "add",
+                  prefill: {
+                    url: failure.url,
+                    name,
+                    references: [
+                      {
+                        key: dialog.source.documentId,
+                        visibility: "visible",
+                        documentId: dialog.source.documentId,
+                        name: dialog.source.name,
+                        kind: dialog.source.kind,
+                        projectName: null,
+                      },
+                    ],
                   },
-                ],
-              },
-            })
+                })
           }
+        />
+      )}
+      {dialog?.type === "registerVersion" && selectedRow && (
+        <RegisterVersionDialog
+          key={dialog.prefill?.url ?? "new"}
+          projectId={projectId}
+          seriesId={selectedRow.id}
+          {...(dialog.prefill ? { prefill: dialog.prefill } : {})}
+          onClose={() => setDialog(null)}
+          onSelect={(target) => select({ series: target.seriesId, doc: target.documentId })}
+        />
+      )}
+      {dialog?.type === "edit" && selectedRow && (
+        <EditDocumentDialog
+          projectId={projectId}
+          seriesId={selectedRow.id}
+          documentId={dialog.documentId}
+          onClose={() => setDialog(null)}
+          onSelect={(target) => select({ series: target.seriesId, doc: target.documentId })}
         />
       )}
       {dialog?.type === "delete" && (

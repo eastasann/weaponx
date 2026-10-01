@@ -52,6 +52,8 @@ graph TD
     CASE -->|"新しい版を作る / これを元に作る<br/>(編集者以上)"| DLG_COPY
     DLG_COPY -->|"作成"| EXT_EDITOR
     DLG_COPY -->|"作成後は今の案件に戻る<br/>(別の案件は通知のリンクから)"| CASE
+    DLG_COPY -->|"ドライブには作れたが登録に失敗: このリンクで登録<br/>(新しい版を作る)"| DLG_VER
+    DLG_COPY -->|"同上(今の案件へのこれを元に作る)"| DLG_ADD
     CASE -->|"新しい版を登録(編集者以上)"| DLG_VER
     DLG_VER -->|"登録"| CASE
     CASE -->|"登録内容を編集(編集者以上)"| DLG_EDIT

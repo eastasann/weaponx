@@ -711,21 +711,25 @@ describe("PATCH /api/documents/:documentId", () => {
     expect(same.status).toBe(200);
   });
 
-  test("参考資料: 送った一式にする。新しく足したものだけを検証し、引き継いだ無効なものは残る", async () => {
+  test("参考資料: 送った一式にする。新しく足したものだけを検証する", async () => {
     const id = await ctx.documentId("業界ニュースまとめ");
-    const analysis = await ctx.documentId("現状分析");
     const survey = await ctx.documentId("調査レポート");
-    const reply = await patch(USERS.yamada, id, { referenceIds: [analysis, survey] });
-    expect(reply.status).toBe(200);
-    expect(
-      (
-        await ctx.call("GET", `/api/series/${await ctx.seriesId("業界ニュースまとめ")}`, {
-          cookie: await ctx.login(USERS.yamada),
-        })
-      ).json.references,
-    ).toEqual([
+    const seriesId = await ctx.seriesId("業界ニュースまとめ");
+    const cookie = await ctx.login(USERS.yamada);
+    const detail = () =>
+      ctx.call("GET", `/api/series/${seriesId}`, { cookie }).then((reply) => reply.json.references);
+    const [hidden] = await detail();
+    expect(hidden).toEqual({ visibility: "deleted", referenceId: expect.any(String) });
+
+    // 見えない参考資料の行を送れば残り、送らなければ外れる
+    const kept = await patch(USERS.yamada, id, {
+      referenceIds: [survey],
+      hiddenReferenceIds: [hidden.referenceId],
+    });
+    expect(kept.status).toBe(200);
+    expect(await detail()).toEqual([
       expect.objectContaining({ visibility: "visible", name: "調査レポート" }),
-      { visibility: "deleted" },
+      { visibility: "deleted", referenceId: hidden.referenceId },
     ]);
     const removed = await patch(USERS.yamada, id, { referenceIds: [survey] });
     expect(removed.status).toBe(200);
@@ -735,6 +739,14 @@ describe("PATCH /api/documents/:documentId", () => {
       .where(eq(schema.documentReferences.documentId, id));
     expect(refs.map((r) => r.referencedDocumentId)).toEqual([survey]);
 
+    // 外れた行の識別子を送っても、行は戻らない
+    const stale = await patch(USERS.yamada, id, {
+      referenceIds: [survey],
+      hiddenReferenceIds: [hidden.referenceId],
+    });
+    expect(stale.status).toBe(200);
+    expect(await detail()).toHaveLength(1);
+
     const bad = await patch(USERS.yamada, id, {
       referenceIds: [survey, await ctx.documentId("研修カリキュラム")],
     });
@@ -742,6 +754,55 @@ describe("PATCH /api/documents/:documentId", () => {
     expect(bad.json.error.code).toBe("REFERENCE_UNAVAILABLE");
     const self = await patch(USERS.yamada, id, { referenceIds: [id] });
     expect(self.json.error.code).toBe("REFERENCE_UNAVAILABLE");
+    const malformed = await patch(USERS.yamada, id, {
+      referenceIds: [survey],
+      hiddenReferenceIds: ["x"],
+    });
+    expect(malformed.json.error.details.fields).toEqual({ hiddenReferenceIds: "invalid_format" });
+    // 見えない参考資料の残し方だけを送っても、見える参考資料の最終形が無いので決められない
+    const alone = await patch(USERS.yamada, id, { hiddenReferenceIds: [] });
+    expect(alone.status).toBe(422);
+    expect(alone.json.error.details.fields).toEqual({ referenceIds: "required" });
+  });
+
+  test("新しい版の登録: 見えない参考資料は、行の識別子を送ったときだけ引き継ぐ", async () => {
+    const cookie = await ctx.login(USERS.yamada);
+    const series = await ctx.seriesId("業界ニュースまとめ");
+    const before = await ctx.call("GET", `/api/series/${series}`, { cookie });
+    const hidden = before.json.references[0].referenceId;
+    const withHidden = await post(USERS.yamada, `/api/series/${series}/versions`, {
+      url: "https://example.com/news-v2.pdf",
+      name: "業界ニュースまとめ v2",
+      kind: "pdf",
+      referenceIds: [],
+      hiddenReferenceIds: [hidden],
+    });
+    expect(withHidden.status).toBe(201);
+    const inherited = await ctx.call("GET", `/api/series/${series}`, { cookie });
+    expect(inherited.json.references).toEqual([
+      { visibility: "deleted", referenceId: expect.any(String) },
+    ]);
+    const without = await post(USERS.yamada, `/api/series/${series}/versions`, {
+      url: "https://example.com/news-v3.pdf",
+      name: "業界ニュースまとめ v3",
+      kind: "pdf",
+      referenceIds: [],
+    });
+    expect(without.status).toBe(201);
+    const dropped = await ctx.call("GET", `/api/series/${series}`, { cookie });
+    expect(dropped.json.references).toEqual([]);
+
+    // 最新版が外した行は、古い版に残っていても、識別子を送り直して戻せない
+    const stale = await post(USERS.yamada, `/api/series/${series}/versions`, {
+      url: "https://example.com/news-v4.pdf",
+      name: "業界ニュースまとめ v4",
+      kind: "pdf",
+      referenceIds: [],
+      hiddenReferenceIds: [hidden],
+    });
+    expect(stale.status).toBe(201);
+    const after = await ctx.call("GET", `/api/series/${series}`, { cookie });
+    expect(after.json.references).toEqual([]);
   });
 
   test("削除済みの版は 404 DOCUMENT_NOT_FOUND(系列が残っているので seriesExists: true)", async () => {
@@ -813,7 +874,10 @@ describe("DELETE /api/documents/:documentId", () => {
     const detail = await ctx.call("GET", `/api/series/${await ctx.seriesId("提案書 v3")}`, {
       cookie: await ctx.login(USERS.yamada),
     });
-    expect(detail.json.references).toContainEqual({ visibility: "deleted" });
+    expect(detail.json.references).toContainEqual({
+      visibility: "deleted",
+      referenceId: expect.any(String),
+    });
   });
 
   test("削除済みの版をもう一度消すと 404 DOCUMENT_NOT_FOUND", async () => {

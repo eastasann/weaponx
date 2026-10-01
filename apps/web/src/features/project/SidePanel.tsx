@@ -26,7 +26,10 @@ type SidePanelProps = {
   /** 編集者以上のデスクトップ・タブレットだけ、操作の欄を出す(design-spec 6.1) */
   canEdit: boolean;
   /** 操作の欄のボタン。ダイアログは呼び出し側が開く */
-  onAction: (action: "newVersion" | "copy" | "delete", version: SelectedVersion) => void;
+  onAction: (
+    action: "newVersion" | "copy" | "registerVersion" | "edit" | "delete",
+    version: SelectedVersion,
+  ) => void;
   /** 「旧版 n件」から開いたとき、読み込めたら版の欄までスクロールする */
   scrollToVersions: boolean;
   onScrolled: () => void;
@@ -258,6 +261,10 @@ export function SidePanel({
             {canCopy(head) && (
               <Button onClick={() => onAction("copy", head)}>{t("panel.copy")}</Button>
             )}
+            <Button onClick={() => onAction("registerVersion", row.latest)}>
+              {t("panel.registerVersion")}
+            </Button>
+            <Button onClick={() => onAction("edit", head)}>{t("panel.edit")}</Button>
             <Button onClick={() => onAction("delete", head)}>{t("panel.deleteVersion")}</Button>
           </div>
         </Section>

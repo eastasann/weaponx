@@ -62,3 +62,23 @@ export const seriesDetailQuery = (seriesId: string, documentId: string | undefin
 
 export const searchQuery = (q: string) =>
   queryOptions({ queryKey: ["search", q], queryFn: () => fetchSearch(q) });
+
+const fetchMembers = (projectId: string) =>
+  unwrap(client.api.projects({ projectId }).members.get());
+export type MemberRow = Awaited<ReturnType<typeof fetchMembers>>["members"][number];
+
+/** 案件のメンバー(案件の更新と一緒に取り直せるよう、案件のキーの下に置く) */
+export const membersQuery = (projectId: string) =>
+  queryOptions({
+    queryKey: ["projects", projectId, "members"],
+    queryFn: () => fetchMembers(projectId),
+  });
+
+const fetchAdminUsers = () => unwrap(client.api.admin.users.get());
+export type AdminUserRow = Awaited<ReturnType<typeof fetchAdminUsers>>["users"][number];
+
+export const adminUsersQuery = queryOptions({
+  queryKey: ["admin", "users"],
+  queryFn: fetchAdminUsers,
+  retry: false,
+});

@@ -174,6 +174,9 @@ export const documents = pgTable(
 export const documentReferences = pgTable(
   "document_references",
   {
+    // 参考資料の行の識別子。見る権限のない・削除された資料は資料の ID を返さないので、
+    // 画面が引き継ぎと取り消しの対象を指すのに使う(資料の ID とは無関係な乱数)
+    id: uuid("id").notNull().defaultRandom(),
     documentId: uuid("document_id")
       .notNull()
       .references(() => documents.id),
@@ -187,6 +190,7 @@ export const documentReferences = pgTable(
   },
   (t) => [
     primaryKey({ columns: [t.documentId, t.referencedDocumentId] }),
+    uniqueIndex("document_references_id_key").on(t.id),
     index("document_references_referenced_idx").on(t.referencedDocumentId),
     check("document_references_not_self", sql`${t.documentId} <> ${t.referencedDocumentId}`),
   ],

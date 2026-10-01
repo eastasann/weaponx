@@ -375,7 +375,7 @@ docs/02-01_system-design-doc.md の ADR-011、5.5・5.7、7章(Google のトー�
 
 ## Step 10: 残り画面: 新しい版を登録・登録内容を編集・メンバー管理・利用者管理
 
-Status:
+Status: done 2026-10-01
 
 ```
 docs/design-spec.md の 6.5.5・6.5.6・6.5.2・6.5.4・6.6 と docs/screen_flow.mermaid、

@@ -128,16 +128,16 @@ describe("GET /api/series/:seriesId", () => {
 
   test("業界ニュースまとめの参考資料は、山田では deleted、佐藤では no_access(名前も ID も返さない)", async () => {
     const yamada = await detail(USERS.yamada, "業界ニュースまとめ");
-    expect(yamada.references).toEqual([{ visibility: "deleted" }]);
+    expect(yamada.references).toEqual([{ visibility: "deleted", referenceId: expect.any(String) }]);
     const sato = await detail(USERS.sato, "業界ニュースまとめ");
-    expect(sato.references).toEqual([{ visibility: "no_access" }]);
+    expect(sato.references).toEqual([{ visibility: "no_access", referenceId: expect.any(String) }]);
     expect(JSON.stringify(sato)).not.toContain("現状分析");
     expect(JSON.stringify(yamada)).not.toContain("現状分析");
   });
 
   test("競合比較の参考資料(D社)は、参加していない山田・佐藤に no_access", async () => {
     const json = await detail(USERS.yamada, "競合比較");
-    expect(json.references).toEqual([{ visibility: "no_access" }]);
+    expect(json.references).toEqual([{ visibility: "no_access", referenceId: expect.any(String) }]);
   });
 
   test("参考にした資料は、見られない案件の資料を no_access で返す(ID は返さない)", async () => {
