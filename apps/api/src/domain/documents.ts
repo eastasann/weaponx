@@ -28,7 +28,7 @@ import { type DriveStatus, driveStatusOf, tryGetDriveFile } from "./drive";
 import { type DbOrTx, shareLockProjectAndRequireRole } from "./projects";
 import { getSeriesRow, getVersion, type SeriesRow, type Version } from "./series";
 
-type Deps = Pick<AppDeps, "db" | "drive">;
+type Deps = Pick<AppDeps, "db" | "drive" | "logger">;
 
 /** 登録・編集の応答(02-01 5.5)。`driveStatus` は画面が連携の状態を更新するのに使う */
 export type DocumentResult = { series: SeriesRow; document: Version; driveStatus: DriveStatus };

@@ -9,7 +9,7 @@ const logger = createLogger({ level: config.logLevel, gcpProjectId: config.gcpPr
 const { db } = createDb(config.databaseUrl);
 
 // 本文の上限は画面の入力(最大でも数KB)に対して十分大きく、巨大な本文でメモリを使わせないための値
-createApp({ config, db, logger, drive: createDrive(config, db) }).listen({
+createApp({ config, db, logger, drive: createDrive(config, db, logger) }).listen({
   port: config.port,
   maxRequestBodySize: 1024 * 1024,
 });

@@ -21,10 +21,11 @@ const MAX_TARGETS = 300;
  * 認可エラーなら連携を要再連携にして `DRIVE_REAUTH_REQUIRED`(それまでに取れた分は反映済み)。
  */
 export async function refreshMetadata(
-  { db, drive }: Pick<AppDeps, "db" | "drive">,
+  deps: Pick<AppDeps, "db" | "drive" | "logger">,
   userId: string,
   projectId: string,
 ): Promise<{ updatedSeriesIds: string[] }> {
+  const { db, drive } = deps;
   await requireProjectRole(db, userId, projectId, "viewer");
   await requireActiveDrive(db, userId);
 
@@ -119,6 +120,6 @@ export async function refreshMetadata(
   }
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
-  if (reauth) throw await reauthRequired(db, userId, reauth);
+  if (reauth) throw await reauthRequired(deps, userId, reauth);
   return { updatedSeriesIds: [...updated] };
 }

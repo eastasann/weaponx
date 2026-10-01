@@ -78,7 +78,7 @@ function fromSchemaError(error: { all?: ValidationIssue[] }): AppError {
  * ログに出す例外の文字列。Drizzle のエラーは本文にクエリのパラメーター(資料名やリンク)を含むので、
  * 元になった DB のエラーだけを出す。
  */
-function safeStack(error: unknown, depth = 0): string | undefined {
+export function safeStack(error: unknown, depth = 0): string | undefined {
   if (!(error instanceof Error) || depth > 3) return undefined;
   if (error.constructor.name === "DrizzleQueryError" && error.cause instanceof Error) {
     return error.cause.stack;

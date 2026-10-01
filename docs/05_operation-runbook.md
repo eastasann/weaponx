@@ -24,11 +24,13 @@
 |-------|--------|---------|
 | `request` | INFO(4xx は WARN、5xx は ERROR) | すべての API リクエストの終わり |
 | `login_succeeded` / `login_failed` | INFO / WARN | Google でのログインの結果(`failed` の理由は `code`)。開発用ログインでは出さない |
-| `drive_reauth_required` | WARN | 利用者の連携が要再連携に切り替わった |
-| `drive_api_error` | WARN | Drive API の失敗(再試行の前) |
+| `reconnect_failed` | WARN | 再連携の失敗(`code` は `failed` / `cancelled` / `wrong_account` / `scope_missing`) |
+| `drive_reauth_required` | WARN | 利用者の連携が要再連携に切り替わった(連携中から切り替わったときの1回だけ) |
+| `drive_api_error` | WARN | Drive API・トークン取得の失敗(再試行の前。`code` は Google の理由、`http_{状態}`、`network_error`、`token_network_error`。ファイル単位の 404・403 は出さない) |
+| `token_rotate_failed` | WARN | 鍵の入れ替えの書き込みに失敗した(トークンは読めたのでドライブは使える。次にアクセストークンを取るときにやり直す) |
 | `token_decrypt_failed` | ERROR | リフレッシュトークンを復号できない(鍵の設定を疑う。3章) |
 | `client_error` | ERROR | 画面の想定外のエラー |
-| `unhandled_error` | ERROR | 5xx の応答になった例外(`request` とは別に、スタック付きで `stack_trace` を出す。Error Reporting が拾うのはこれ) |
+| `unhandled_error` | ERROR | 想定外の例外(5xx の応答になったもの、Google から戻った後の保存の失敗で `/login` や `returnTo` へ 302 で戻したもの)。`request` とは別に、スタック付きで `stack_trace` を出す。Error Reporting が拾うのはこれ |
 | `startup` | INFO | API の起動(`port`) |
 | `bootstrap_admin` | INFO | 最初の管理者の登録の結果(`detail` は `created` / `promoted` / `skipped`) |
 
@@ -256,7 +258,7 @@ printf 'k2:%s,k1:%s' "$(openssl rand -base64 32)" '{今の k1 の値}' \
 ```
 
 2. Cloud Run の新しいリビジョンを出す(新しい暗号化は k2 で行われ、k1 の暗号文も読める)
-3. API は、k1 で復号したトークンを k2 で暗号化し直して保存する(Drive を使うたび・ログインと再連携のたび。ADR-012)。`select count(*) from drive_connections where credentials like 'k1:%'` を週に1回見る
+3. API は、k1 で復号したトークンを k2 で暗号化し直して保存する(アクセストークンを取り直すたび、つまりおよそ1時間ごと・ログインと再連携のたび。ADR-012)。`select count(*) from drive_connections where credentials like 'k1:%'` を週に1回見る
 4. 1か月たっても残る行(しばらく使っていない人)は、`update drive_connections set status = 'needs_reauth', updated_at = now() where credentials like 'k1:%';` で要再連携にする(次に使うとき再連携してもらう)。0件になったら、k1 を外したバージョンを作る
 
 ### KPI の測り方

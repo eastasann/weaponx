@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 import type { AppDeps } from "./lib/deps";
 import { httpBase } from "./lib/http";
 import { adminUserRoutes } from "./routes/admin-users";
+import { googleAuthRoutes } from "./routes/auth-google";
 import { documentRoutes } from "./routes/documents";
 import { devDriveRoutes, driveRoutes } from "./routes/drive";
 import { meRoutes } from "./routes/me";
@@ -13,6 +14,7 @@ export function createApp(deps: AppDeps) {
   return new Elysia({ prefix: "/api" })
     .use(httpBase(deps))
     .use(systemRoutes(deps))
+    .use(googleAuthRoutes(deps))
     .use(logoutRoutes(deps))
     .use(devRoutes(deps))
     .use(meRoutes(deps))

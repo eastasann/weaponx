@@ -9,12 +9,13 @@ import { requestState } from "../lib/http";
 
 export const SESSION_COOKIE = "wx_session";
 export const LOGIN_NOTICE_COOKIE = "wx_login_notice";
+export const DRIVE_NOTICE_COOKIE = "wx_drive_notice";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** 最後の操作から14日。残りが7日を切ったら延長する(ADR-010) */
 const SESSION_TTL_MS = 14 * DAY_MS;
 const EXTEND_BELOW_MS = 7 * DAY_MS;
-const LOGIN_NOTICE_MAX_AGE_S = 60;
+const NOTICE_MAX_AGE_S = 60;
 
 export type AuthUser = {
   id: string;
@@ -46,8 +47,17 @@ export function clearSessionCookie(deps: AppDeps): string {
  * 値は JSON を `encodeURIComponent` したもの。
  */
 export function loginNoticeCookie(deps: AppDeps, notice: { code: string; email?: string }): string {
-  return serializeCookie(LOGIN_NOTICE_COOKIE, encodeURIComponent(JSON.stringify(notice)), {
-    maxAge: LOGIN_NOTICE_MAX_AGE_S,
+  return noticeCookie(deps, LOGIN_NOTICE_COOKIE, notice);
+}
+
+/** 再連携の結果を画面に伝える Cookie(02-01 5.2)。`loginNoticeCookie` と同じ形式 */
+export function driveNoticeCookie(deps: AppDeps, notice: { code: string }): string {
+  return noticeCookie(deps, DRIVE_NOTICE_COOKIE, notice);
+}
+
+function noticeCookie(deps: AppDeps, name: string, notice: object): string {
+  return serializeCookie(name, encodeURIComponent(JSON.stringify(notice)), {
+    maxAge: NOTICE_MAX_AGE_S,
     httpOnly: false,
     secure: deps.config.secureCookies,
   });

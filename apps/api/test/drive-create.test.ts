@@ -704,6 +704,8 @@ describe("POST /api/dev/drive/grant(ドライブの模擬)", () => {
 test("DRIVE_MODE が mock でなければ、POST /api/dev/drive/grant のルートを登録しない", async () => {
   const google = createTestContext({
     DRIVE_MODE: "google",
+    GOOGLE_CLIENT_ID: "test-client",
+    GOOGLE_CLIENT_SECRET: "test-secret",
     GOOGLE_PICKER_API_KEY: "test-key",
     GOOGLE_PROJECT_NUMBER: "123456789",
   });

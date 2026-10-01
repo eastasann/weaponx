@@ -168,7 +168,7 @@
 
 **決定:** `drive_connections.credentials` にはリフレッシュトークンだけを、AES-256-GCM で暗号化して保存する。形式は `{鍵ID}:{IV}:{暗号文}:{タグ}`(各 base64url)。鍵は環境変数 `TOKEN_ENCRYPTION_KEYS`(Secret Manager から注入)に `{鍵ID}:{base64の32バイト},...` で並べ、先頭を暗号化に使い、すべてを復号に使う。
 
-**理由:** DB のバックアップや SQL が漏れても、トークンだけでは使えないようにする。鍵 ID を付けておくと、鍵を入れ替えるときに古い暗号文も読める。先頭以外の鍵で復号できたときは、先頭の鍵で暗号化し直して保存する(Drive を使うたびに少しずつ入れ替わる。手順は `docs/05_operation-runbook.md` 6章)。暗号化・復号がアプリの中で終わるので、Drive を呼ぶたびに外部サービスを待たない。
+**理由:** DB のバックアップや SQL が漏れても、トークンだけでは使えないようにする。鍵 ID を付けておくと、鍵を入れ替えるときに古い暗号文も読める。暗号文は利用者の ID を追加認証データ(AAD)にして、別の利用者の行へ移しても復号できないようにする。先頭以外の鍵で復号できたときは、先頭の鍵で暗号化し直して保存する(Drive を使うたびに少しずつ入れ替わる。手順は `docs/05_operation-runbook.md` 6章)。暗号化・復号がアプリの中で終わるので、Drive を呼ぶたびに外部サービスを待たない。
 
 **トレードオフ:** 鍵が環境変数としてアプリのメモリに載る。Cloud KMS で毎回復号する案より鍵の保護は弱いが、呼び出しごとの遅延と費用、構成の複雑さを避けた。
 
@@ -282,7 +282,7 @@ Google のアクセストークン(1時間有効)だけは、インスタンス�
 | (ルートなし) | エラー(想定外の障害。3.1、6.5.7)は、画面全体を表示できないときにエラー境界で出す |
 
 - ダイアログ(design-spec 3.4)はルートを持たない
-- 認証の要る画面を未ログインで開いたら、`/login?returnTo={元のパスと検索パラメーター}` へ送る(design-spec 6.0.7)。`returnTo` は `/` で始まり `//` で始まらないパスだけを受け付ける(オープンリダイレクト対策)
+- 認証の要る画面を未ログインで開いたら、`/login?returnTo={元のパスと検索パラメーター}` へ送る(design-spec 6.0.7)。`returnTo` は `/` で始まり `//` で始まらないパスだけを受け付ける。バックスラッシュ・制御文字を含むものと2048文字を超えるものも受け付けない(オープンリダイレクト対策。判定は `packages/shared` の `isSafeReturnTo`)
 - API のパスはすべて `/api/` で始まる(5章)。ロードバランサーの振り分けもこれに従う
 
 ---
@@ -376,6 +376,7 @@ type ProjectRow = {
 **`GET /api/auth/google/login?returnTo={path}&locale={ja|en}&consent={0|1}`**
 
 - 302 で Google の認可エンドポイントへ。パラメーター: `scope=openid email profile https://www.googleapis.com/auth/drive.file`、`access_type=offline`、`include_granted_scopes=true`、`prompt=select_account`(`consent=1` のときは `consent select_account`)、PKCE(S256)、`state`
+- `GOOGLE_CLIENT_ID`・`GOOGLE_CLIENT_SECRET` が空(開発の既定。5.10)なら Google へは送らず、失敗の扱い(下の `failed`)と同じに 302 `/login` へ戻す
 - 一時 Cookie(HttpOnly、Secure、SameSite=Lax、Path=/api/auth、10分): `wx_oauth_state`、`wx_oauth_verifier`、`wx_oauth_ctx`(`{ mode: "login", returnTo, locale, consent }` の JSON)
 
 **`GET /api/auth/google/reconnect?returnTo={path}`**
@@ -390,13 +391,13 @@ type ProjectRow = {
 2. コードをトークンに交換し、ID トークンのクレーム(`sub`・`email`・`email_verified`・`name`・`picture`、`aud`・`iss`・`exp`)を確かめる
 3. 利用者を `google_subject = sub` で探し、無ければ `email = lower(email) AND google_subject IS NULL` で探す(design-spec 6.5.1)
 4. 判定の順(design-spec 6.5.1): 見つからない → `not_allowed`、`status = suspended` → `suspended`、許可された範囲に `drive.file` が無い → `drive_scope_missing`
-5. リフレッシュトークンが返ったら暗号化して `drive_connections` を連携中で作る・更新する。返らず、連携の行が無いか要再連携なら、`consent=1` で 302 `/api/auth/google/login` へ送り直す(送り直した後も返らなければ `failed`)
+5. リフレッシュトークンが返ったら暗号化して `drive_connections` を連携中で作る・更新する。返らず、連携の行が無いか要再連携なら、`consent=1` で 302 `/api/auth/google/login` へ送り直す(送り直した後も返らなければ `failed`)。連携中の人はトークンを変えず、許可の範囲と日時だけ更新して続ける
 6. `users` を更新(初回は `google_subject`、毎回 `display_name`・`avatar_url`・`last_login_at`、`locale` が空なら `wx_oauth_ctx.locale`)。期限切れのセッションをまとめて消す(掃除)。新しいセッションを作り `wx_session` を返す
 7. 302 で `returnTo`(無ければ `/`)へ
 
-失敗したときは 302 `/login` へ送り、Cookie `wx_login_notice`(JS から読める、SameSite=Lax、Path=/、60秒。値は JSON を `encodeURIComponent` したもの)に `{ "code": "not_allowed" | "suspended" | "drive_scope_missing" | "cancelled" | "failed", "email"?: string }` を入れる。`cancelled` は Google から `error=access_denied` が返った場合、それ以外の障害は `failed`。ログイン画面はこれを読んで design-spec 6.5.1 の表示を出し、Cookie を消す(メールを URL に載せないため)。
+`wx_oauth_ctx` が無い・読めない(10分を過ぎた場合を含む)ときは、`mode` が分からないのでログインの失敗として扱う。失敗したときは 302 `/login` へ送り、Cookie `wx_login_notice`(JS から読める、SameSite=Lax、Path=/、60秒。値は JSON を `encodeURIComponent` したもの)に `{ "code": "not_allowed" | "suspended" | "drive_scope_missing" | "cancelled" | "failed", "email"?: string }` を入れる。`cancelled` は Google から `error=access_denied` が返った場合、それ以外の障害は `failed`。ログイン画面はこれを読んで design-spec 6.5.1 の表示を出し、Cookie を消す(メールを URL に載せないため)。
 
-`mode: "reconnect"` の処理: `sub` が `users.google_subject` と違えば `wrong_account`、範囲が足りなければ `scope_missing`、交換に失敗すれば `failed`、`access_denied` なら `cancelled`。成功したら `drive_connections` を連携中に更新して `reconnected`。どの場合も 302 で `returnTo` へ戻し、Cookie `wx_drive_notice`(JS から読める、SameSite=Lax、Path=/、60秒。値は `wx_login_notice` と同じ形式)に `{ "code": ... }` を入れる。画面はこれで design-spec 6.0.5 の通知を出す。
+`mode: "reconnect"` の処理: セッションが無い、`state` が合わない、交換に失敗する、ID トークンを確かめられない、リフレッシュトークンが返らない(`prompt=consent` なので返るはず)ときは `failed`。`sub` が `users.google_subject` と違えば `wrong_account`、範囲が足りなければ `scope_missing`、`access_denied` なら `cancelled`。成功したら `drive_connections` を連携中に更新して `reconnected`。どの場合も 302 で `returnTo` へ戻し、Cookie `wx_drive_notice`(JS から読める、SameSite=Lax、Path=/、60秒。値は `wx_login_notice` と同じ形式)に `{ "code": ... }` を入れる。画面はこれで design-spec 6.0.5 の通知を出す。
 
 **`POST /api/auth/logout`** → 204。セッションの行を消し、`wx_session` を消す。
 
@@ -682,7 +683,7 @@ type ProjectRow = {
 
 - 「アプリが使えるファイル」は、利用者が登録した版のうち資料名を Drive から取得できたもの(`metadata_fetched_at` に値がある版)のファイル ID と、ファイル選択画面で選んだファイルの集合。前者は DB の版から導き(シードし直しても API の再起動が要らない)、後者だけを API のメモリに持つ(開発・E2E 専用。1台で動かす)。削除済みの版も数える(登録した人がそのファイルを使えた事実は変わらない)。ファイルの資料名・種別・更新日時は、その版の値を返す(`grant` できるのも、そのような版があるファイルだけ)。要再連携の利用者には認可エラーを返す
 - 画面は `/api/config` の `picker` が `null` のとき、Google Picker の代わりに模擬のファイル選択画面(シードのドライブの資料の一覧)を出し、選んだら `POST /api/dev/drive/grant` を呼ぶ
-- `GET /api/auth/google/reconnect` は、Google へ行かずに `drive_connections.status` を `active` にし、`wx_drive_notice`(`reconnected`)を入れて `returnTo` へ戻す
+- `GET /api/auth/google/reconnect` は、Google へ行かずに `drive_connections.status` を `active` にし、`wx_drive_notice`(`reconnected`)を入れて `returnTo` へ戻す。連携の行が無い利用者は `failed`(模擬には、認可情報を作れる Google が無い)
 
 ---
 
@@ -1038,7 +1039,7 @@ export const documentTags = pgTable(
 | CSRF | SameSite=Lax に加え、状態を変えるメソッドは `Origin` が `APP_ORIGIN` と一致しなければ 403 `CSRF_REJECTED`。本文は JSON だけを受け付ける |
 | CORS | 使わない(同じオリジン。ローカルも Vite のプロキシで同じオリジンにする)。CORS ヘッダーは返さない |
 | OAuth | PKCE(S256)と `state` を使う。`returnTo` は相対パスだけ(4章)。ID トークンの `aud`・`iss`・`exp`・`email_verified` を確かめる |
-| Google のトークン | リフレッシュトークンは AES-256-GCM で暗号化して保存(ADR-012)。アクセストークンは保存しない(インスタンスのメモリにだけキャッシュ)。Picker 用に画面へ渡すのは `drive.file` の短命のアクセストークンだけで、画面は保存しない |
+| Google のトークン | リフレッシュトークンは AES-256-GCM で暗号化して保存(ADR-012)。アクセストークンは保存しない(インスタンスのメモリにだけキャッシュ)。リフレッシュトークンからの取得は `scope=drive.file` を付けて行い、Picker に渡すトークンの権限もこれだけにする。Picker 用に画面へ渡すのは `drive.file` の短命のアクセストークンだけで、画面は保存しない |
 | レート制限 | Cloud Armor で IP ごとに、`/api/auth/*` は1分60回、それ以外の `/api/*` は1分600回。超えたら 429(ADR-007) |
 | セキュリティヘッダー | バックエンドバケットと Cloud Run の応答に `Strict-Transport-Security`、`X-Content-Type-Options: nosniff`、`Referrer-Policy: strict-origin`(Referer をオリジンだけにし、検索語を含む URL を載せないため。`no-referrer` は使わない: ブラウザが同じオリジンの POST の `Origin` まで `null` にし、CSRF の確認で全部弾かれる)、`Content-Security-Policy`(`default-src 'self'`、Picker のために `script-src` に `https://apis.google.com`、`frame-src` に `https://docs.google.com https://drive.google.com https://accounts.google.com`、`img-src` に `https://*.googleusercontent.com`、`frame-ancestors 'none'`)を付ける |
 | 外部リンク | 資料を開くリンクは `target="_blank" rel="noopener noreferrer"` |
@@ -1117,7 +1118,7 @@ export const documentTags = pgTable(
 | `INTERNAL` | 500 | 通信・その他 | — | 想定外の例外 |
 | `SERVICE_UNAVAILABLE` | 503 | 通信・その他 | — | DB・Google に一時的につながらない |
 
-- Google の Drive API の応答の分け方: 401、`invalid_grant`(リフレッシュ時)、範囲不足の 403 → `drive_connections.status` を `needs_reauth` にし、`DRIVE_REAUTH_REQUIRED` を返す。ただし、5.5 の登録系(リンクでの登録、新しい版の登録、登録内容の編集でリンクを変えたとき)の中での取り直しでは、エラーを返さずに登録を成功させ、状態だけを `driveStatus` で返す。ファイル単位の 404・403(`insufficientFilePermissions` 等)→ `DRIVE_FILE_NOT_ACCESSIBLE` / `DRIVE_SOURCE_UNAVAILABLE`。レート制限(`rateLimitExceeded`・`userRateLimitExceeded`)・5xx → 1回だけ待って再試行し、だめなら `SERVICE_UNAVAILABLE`(要再連携にしない)。ただし作成・コピー(5.5)の失敗は、認可エラーとコピー元の `DRIVE_SOURCE_UNAVAILABLE` を除き、502 `DRIVE_CREATE_FAILED` にする
+- Google の Drive API の応答の分け方: 401、`invalid_grant`・`invalid_scope`(リフレッシュ時)、範囲不足の 403(`insufficientPermissions`・`authError`・`ACCESS_TOKEN_SCOPE_INSUFFICIENT`)→ `drive_connections.status` を `needs_reauth` にし、`DRIVE_REAUTH_REQUIRED` を返す。ただし、キャッシュしたアクセストークンが古いだけのことがある(再連携の前に取ったトークンなど)ので、401・範囲不足の 403 は、キャッシュを捨てて取り直したトークンで1回だけやり直し、それでも同じなら要再連携にする(次の再試行の1回とは別に数える)。ただし、5.5 の登録系(リンクでの登録、新しい版の登録、登録内容の編集でリンクを変えたとき)の中での取り直しでは、エラーを返さずに登録を成功させ、状態だけを `driveStatus` で返す。ファイル単位の 404・403(`insufficientFilePermissions` 等。理由が分からない 403 を含む)→ `DRIVE_FILE_NOT_ACCESSIBLE` / `DRIVE_SOURCE_UNAVAILABLE`。レート制限(`rateLimitExceeded`・`userRateLimitExceeded`・`sharingRateLimitExceeded`・429)・5xx・通信の失敗 → 1回だけ待って再試行し、だめなら `SERVICE_UNAVAILABLE`(要再連携にしない)。ただし、ファイルを作るコピー・作成は、処理されたかどうか分からない失敗(5xx・通信の失敗)を再試行しない(同じファイルを2つ作らないため)。アプリ側の設定や容量の問題(`accessNotConfigured`・`SERVICE_DISABLED`・`dailyLimitExceeded`・`storageQuotaExceeded`・`quotaExceeded` の 403)は再試行せず `SERVICE_UNAVAILABLE`。リフレッシュトークンを復号できないときも `SERVICE_UNAVAILABLE` で、要再連携にしない(鍵の設定の問題で、利用者の認可は失われていない。`token_decrypt_failed` を記録する。`docs/05_operation-runbook.md` 3章)。ただし作成・コピー(5.5)の失敗は、認可エラーとコピー元の `DRIVE_SOURCE_UNAVAILABLE` を除き、502 `DRIVE_CREATE_FAILED` にする
 - 同じ結果になる操作(停止済みの人の停止など。design-spec 6.0.6)は 200 で成功を返す
 
 ### フロントエンドでの表示方針

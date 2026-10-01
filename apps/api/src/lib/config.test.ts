@@ -70,14 +70,42 @@ describe("loadConfig", () => {
 
   test("Picker の設定は DRIVE_MODE=google のときだけ必須で、mock では null", () => {
     expect(loadConfig(base).picker).toBeNull();
-    expect(() => loadConfig({ ...base, DRIVE_MODE: "google" })).toThrow("GOOGLE_PICKER_API_KEY");
+    const client = { GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret" };
+    expect(() => loadConfig({ ...base, ...client, DRIVE_MODE: "google" })).toThrow(
+      "GOOGLE_PICKER_API_KEY",
+    );
     const google = loadConfig({
       ...base,
+      ...client,
       DRIVE_MODE: "google",
       GOOGLE_PICKER_API_KEY: "AIza",
       GOOGLE_PROJECT_NUMBER: "123",
     });
     expect(google.picker).toEqual({ apiKey: "AIza", appId: "123" });
+  });
+
+  test("OAuth クライアントは DRIVE_MODE=google のときだけ必須。両方が入っているときだけ使える", () => {
+    const picker = { GOOGLE_PICKER_API_KEY: "AIza", GOOGLE_PROJECT_NUMBER: "123" };
+    expect(loadConfig(base).google).toBeNull();
+    expect(loadConfig({ ...base, GOOGLE_CLIENT_ID: "id" }).google).toBeNull();
+    expect(() => loadConfig({ ...base, ...picker, DRIVE_MODE: "google" })).toThrow(
+      "GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET",
+    );
+    const google = loadConfig({
+      ...base,
+      ...picker,
+      DRIVE_MODE: "google",
+      GOOGLE_CLIENT_ID: "id",
+      GOOGLE_CLIENT_SECRET: "secret",
+    });
+    expect(google.google).toEqual({ clientId: "id", clientSecret: "secret" });
+  });
+
+  test("暗号化鍵は並びのまま取り出す(先頭が暗号化に使う鍵)", () => {
+    const k2 = `k2:${Buffer.alloc(32, 2).toString("base64")}`;
+    const keys = loadConfig({ ...base, TOKEN_ENCRYPTION_KEYS: `${k2},${KEY}` }).tokenKeys;
+    expect(keys.map((k) => k.id)).toEqual(["k2", "k1"]);
+    expect(keys[0]?.key).toEqual(Buffer.alloc(32, 2));
   });
 
   test("GCP_PROJECT_ID は空でもよい", () => {

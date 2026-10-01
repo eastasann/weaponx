@@ -114,6 +114,18 @@ describe("POST /api/drive/file-info(ドライブの模擬)", () => {
         .from(schema.driveConnections)
         .where(eq(schema.driveConnections.userId, await failing.userId(USERS.yamada)));
       expect(connection?.status).toBe("needs_reauth");
+      // 切り替わったときの1回だけ記録する(05 1章)
+      const second = await failing.call("POST", "/api/drive/file-info", {
+        cookie,
+        body: { fileId: "x" },
+      });
+      expect(second.status).toBe(409);
+      const logged = failing.logs.filter((l) => l.event === "drive_reauth_required");
+      expect(logged).toHaveLength(1);
+      expect(logged[0]).toMatchObject({
+        severity: "WARN",
+        userId: await failing.userId(USERS.yamada),
+      });
     } finally {
       await failing.seed();
       await failing.close();

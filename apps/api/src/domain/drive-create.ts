@@ -18,7 +18,7 @@ import { reauthRequired, requireActiveDrive } from "./drive";
 import { type DbOrTx, requireProjectRole, shareLockProjectAndRequireRole } from "./projects";
 import { getSeriesRow, getVersion, type SeriesRow, type Version } from "./series";
 
-type Deps = Pick<AppDeps, "db" | "drive">;
+type Deps = Pick<AppDeps, "db" | "drive" | "logger">;
 
 type Created = { series: SeriesRow; document: Version; editUrl: string };
 
@@ -28,7 +28,7 @@ type Created = { series: SeriesRow; document: Version; editUrl: string };
  * そのほかの失敗は `DRIVE_CREATE_FAILED`(02-01 8章)。
  */
 async function callDrive(
-  { db }: Pick<Deps, "db">,
+  deps: Deps,
   userId: string,
   kind: "create" | "copy",
   run: () => Promise<DriveFile>,
@@ -37,7 +37,7 @@ async function callDrive(
     return await run();
   } catch (error) {
     if (!(error instanceof DriveError)) throw error;
-    if (error.reason === "reauth") throw await reauthRequired(db, userId, error);
+    if (error.reason === "reauth") throw await reauthRequired(deps, userId, error);
     if (kind === "copy" && error.reason === "not_accessible") {
       throw new AppError("DRIVE_SOURCE_UNAVAILABLE", { cause: error });
     }

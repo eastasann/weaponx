@@ -229,7 +229,7 @@ docs/design-spec.md 6.0.5・6.0.6・6.0.8・6.0.9・6.1「メタデータの取�
 
 ## Step 6: Google のログイン + 本物のドライブ
 
-Status:
+Status: done 2026-10-01
 
 ```
 docs/02-01_system-design-doc.md の ADR-010・ADR-011・ADR-012・ADR-013、5.2、5.7、7章(OAuth・Google のトークン)、8章(Drive の応答の分け方)と、

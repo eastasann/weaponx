@@ -20,12 +20,17 @@ const ConfigSchema = Type.Object({
   APP_ORIGIN: Type.String({ pattern: "^https?://[^/?#]+$" }),
   GCP_PROJECT_ID: Type.String(),
   TOKEN_ENCRYPTION_KEYS: Type.String(),
+  GOOGLE_CLIENT_ID: Type.String(),
+  GOOGLE_CLIENT_SECRET: Type.String(),
   GOOGLE_PICKER_API_KEY: Type.String(),
   GOOGLE_PROJECT_NUMBER: Type.String(),
   DATABASE_URL: Type.String({ pattern: "^postgres(ql)?://.+" }),
   DEV_LOGIN_ENABLED: Bool,
   DRIVE_MODE: Type.Union([Type.Literal("mock"), Type.Literal("google")]),
 });
+
+/** リフレッシュトークンの暗号化鍵(ADR-012) */
+export type TokenKey = { id: string; key: Buffer };
 
 export type Config = {
   nodeEnv: Static<typeof ConfigSchema>["NODE_ENV"];
@@ -38,6 +43,10 @@ export type Config = {
   gcpProjectId: string;
   /** Cookie に Secure を付けるか。ローカルの http では付けない */
   secureCookies: boolean;
+  /** 先頭が暗号化に使う鍵、すべてが復号に使う鍵(ADR-012) */
+  tokenKeys: TokenKey[];
+  /** Google の OAuth クライアント。`GOOGLE_CLIENT_ID`・`GOOGLE_CLIENT_SECRET` の両方が空でないときだけ値が入る */
+  google: { clientId: string; clientSecret: string } | null;
   /** Google Picker 用。`driveMode` が `google` のときだけ値が入る */
   picker: { apiKey: string; appId: string } | null;
   databaseUrl: string;
@@ -77,6 +86,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     APP_ORIGIN: env.APP_ORIGIN ?? "",
     GCP_PROJECT_ID: env.GCP_PROJECT_ID ?? "",
     TOKEN_ENCRYPTION_KEYS: env.TOKEN_ENCRYPTION_KEYS ?? "",
+    GOOGLE_CLIENT_ID: env.GOOGLE_CLIENT_ID ?? "",
+    GOOGLE_CLIENT_SECRET: env.GOOGLE_CLIENT_SECRET ?? "",
     GOOGLE_PICKER_API_KEY: env.GOOGLE_PICKER_API_KEY ?? "",
     GOOGLE_PROJECT_NUMBER: env.GOOGLE_PROJECT_NUMBER ?? "",
     DATABASE_URL: env.DATABASE_URL ?? "",
@@ -90,6 +101,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   if (!isValidTokenEncryptionKeys(input.TOKEN_ENCRYPTION_KEYS))
     invalid.add("TOKEN_ENCRYPTION_KEYS");
   if (input.DRIVE_MODE === "google") {
+    if (!input.GOOGLE_CLIENT_ID) invalid.add("GOOGLE_CLIENT_ID");
+    if (!input.GOOGLE_CLIENT_SECRET) invalid.add("GOOGLE_CLIENT_SECRET");
     if (!input.GOOGLE_PICKER_API_KEY) invalid.add("GOOGLE_PICKER_API_KEY");
     if (!input.GOOGLE_PROJECT_NUMBER) invalid.add("GOOGLE_PROJECT_NUMBER");
   }
@@ -105,6 +118,14 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     appOrigin: input.APP_ORIGIN,
     gcpProjectId: input.GCP_PROJECT_ID,
     secureCookies: input.APP_ORIGIN.startsWith("https://"),
+    tokenKeys: input.TOKEN_ENCRYPTION_KEYS.split(",").map((entry) => {
+      const [id = "", key = ""] = entry.split(":");
+      return { id, key: Buffer.from(key, "base64") };
+    }),
+    google:
+      input.GOOGLE_CLIENT_ID && input.GOOGLE_CLIENT_SECRET
+        ? { clientId: input.GOOGLE_CLIENT_ID, clientSecret: input.GOOGLE_CLIENT_SECRET }
+        : null,
     picker:
       input.DRIVE_MODE === "google"
         ? { apiKey: input.GOOGLE_PICKER_API_KEY, appId: input.GOOGLE_PROJECT_NUMBER }
