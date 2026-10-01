@@ -440,7 +440,7 @@ docs/04_deployment-procedure.md の 2章・3章・5章、docs/02-01_system-desig
 
 ## Step 12: テスト + 仕上げ
 
-Status:
+Status: done 2026-10-01
 
 ```
 docs/02-01_system-design-doc.md 10章のテスト戦略を満たし、コード品質を仕上げてください。

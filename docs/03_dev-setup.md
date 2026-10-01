@@ -239,6 +239,9 @@ make test
 # 特定のファイルだけ(apps/web のファイルを指すと画面の部品のテストだけを流す)
 make test ARGS="apps/api/test/documents.test.ts"
 
+# カバレッジ(ファイルごとの行・関数の表が出る。しきい値での失敗は無いので、02-01 10章の目標は表で読む)
+make test ARGS="--coverage"
+
 # E2E(Playwright)。テスト用 DB を作り直してデモデータを入れ、api-e2e・web-e2e を起動して流し、終わったら止める。
 # ARGS で特定のファイルだけにできる(例: ARGS="tests/foundation.spec.ts")
 make e2e

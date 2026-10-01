@@ -127,6 +127,22 @@ describe("画面のエラーの受け取り", () => {
 });
 
 describe("リクエストのログ", () => {
+  test("KPI の集計に使う userId と route(GET /api/projects/:projectId/series)が出る", async () => {
+    const cookie = await ctx.login("yamada@example.com");
+    ctx.logs.length = 0;
+    const reply = await ctx.call(
+      "GET",
+      `/api/projects/${await ctx.projectId("A社 DX提案")}/series`,
+      {
+        cookie,
+      },
+    );
+    expect(reply.status).toBe(200);
+    const entry = ctx.logs.find((l) => l.event === "request");
+    expect(entry).toMatchObject({ route: "GET /api/projects/:projectId/series", status: 200 });
+    expect(entry?.userId).toBe(await ctx.userId("yamada@example.com"));
+  });
+
   test("route はテンプレートで、ID・本文・メール・Cookie を含まない", async () => {
     const cookie = await ctx.login("yamada@example.com");
     const projectId = await ctx.projectId("A社 DX提案");

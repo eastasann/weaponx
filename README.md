@@ -1,5 +1,12 @@
 # weaponx
 
+案件ごとに増えるスライドとドキュメントを、作った時点で「どの案件か・何を参考にしたか・どれの新しい版か」を記録して管理するツール。資料の実体は Google ドライブなど元の場所に置いたまま、アプリは管理に徹する。
+
+- ドキュメントの入口と読み順: [docs/README.md](docs/README.md)
+- 開発環境を動かす(Docker・make・git だけで動く): [docs/03_dev-setup.md](docs/03_dev-setup.md) 3章
+
+## DRAFT
+
 このリポジトリでは [DRAFT](https://github.com/dwnfrc/DWNFRC-DRAFT)(Document-driven, Reproducible, AI-powered, Full-stack Toolkit)を Claude Code のスキルとして使える。
 
 DRAFT は、いきなりコードを書かずにコンセプトから設計書を段階的に練り上げ、確かな設計図ができてから実装に入るAI駆動開発フレームワーク。
