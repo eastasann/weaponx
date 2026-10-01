@@ -23,11 +23,14 @@
 | event | レベル | 出る場面 |
 |-------|--------|---------|
 | `request` | INFO(4xx は WARN、5xx は ERROR) | すべての API リクエストの終わり |
-| `login_succeeded` / `login_failed` | INFO / WARN | ログインの結果(`failed` の理由は `code`) |
+| `login_succeeded` / `login_failed` | INFO / WARN | Google でのログインの結果(`failed` の理由は `code`)。開発用ログインでは出さない |
 | `drive_reauth_required` | WARN | 利用者の連携が要再連携に切り替わった |
 | `drive_api_error` | WARN | Drive API の失敗(再試行の前) |
 | `token_decrypt_failed` | ERROR | リフレッシュトークンを復号できない(鍵の設定を疑う。3章) |
 | `client_error` | ERROR | 画面の想定外のエラー |
+| `unhandled_error` | ERROR | 5xx の応答になった例外(`request` とは別に、スタック付きで `stack_trace` を出す。Error Reporting が拾うのはこれ) |
+| `startup` | INFO | API の起動(`port`) |
+| `bootstrap_admin` | INFO | 最初の管理者の登録の結果(`detail` は `created` / `promoted` / `skipped`) |
 
 ### ログレベル
 

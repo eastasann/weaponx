@@ -200,6 +200,7 @@ unset DB_PASSWORD
 | `PORT` | Cloud Run が入れる(8080) | Cloud Run |
 | `LOG_LEVEL` | `info` | Terraform(固定) |
 | `APP_VERSION` | デプロイしたバージョン | `deploy.yml` |
+| `GCP_PROJECT_ID` | `{PROJECT_ID}` | Terraform(`project_id` から) |
 | `DRIVE_MODE` | `google` | Terraform(固定。`mock` だと API は起動しない。02-01 5.10) |
 | `DEV_LOGIN_ENABLED` | `false` | Terraform(固定。`true` だと API は起動しない。02-01 5.10) |
 | `GOOGLE_CLIENT_ID` | Step 2 の `weaponx-production` | `production.tfvars` |
@@ -233,6 +234,8 @@ unset DB_PASSWORD
 gcloud run jobs execute weaponx-migrate --region=asia-northeast1 --wait \
   --command=bun --args="run,scripts/bootstrap-admin.ts,--email=you@example.com"
 ```
+
+有効な管理者が既にいると何も登録せず、ジョブは失敗(終了コード1)として終わる。
 
 4. https://{DOMAIN} を開き、そのメールの Google アカウントでログインする。以降の利用者は利用者管理(A1)から追加する
 

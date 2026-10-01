@@ -68,7 +68,7 @@ export const sessions = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     expiresAt: tz("expires_at").notNull(),
     createdAt: tz("created_at").notNull().defaultNow(),
-    lastUsedAt: tz("last_used_at").notNull().defaultNow(),
+    lastUsedAt: tz("last_used_at").notNull().defaultNow(), // 延長した日時。毎回は更新しない
   },
   (t) => [
     index("sessions_user_id_idx").on(t.userId),

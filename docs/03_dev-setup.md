@@ -134,6 +134,7 @@ make dev
 | `PORT` | `3000` | API の待ち受け |
 | `LOG_LEVEL` | `debug` | `debug` / `info` / `warn` / `error` |
 | `APP_VERSION` | `dev` | `/api/healthz` と `/api/config` が返す版 |
+| `GCP_PROJECT_ID` | (空) | ログ行の `logging.googleapis.com/trace` に使う GCP のプロジェクト ID。空のときはその項目を出さない(`docs/02-01_system-design-doc.md` 8章) |
 | `DATABASE_URL` | `postgres://weaponx:weaponx@db:5432/weaponx` | 開発用 DB |
 | `TEST_DATABASE_URL` | `postgres://weaponx:weaponx@db:5432/weaponx_test` | 結合テスト用 DB(テストのたびに作り直す) |
 | `DEV_LOGIN_ENABLED` | `true` | 開発用ログイン(Google を通さない) |
@@ -270,7 +271,7 @@ make e2e-report
 | `make db-reset` | 開発用 DB の作り直し |
 | `make db-studio` | DB GUI起動(Drizzle Studio) |
 | `make db-psql` | psql で開発用 DB につなぐ |
-| `make bootstrap-admin EMAIL=...` | 管理者が1人もいないときに、最初の管理者を登録する |
+| `make bootstrap-admin EMAIL=...` | 有効な管理者が1人もいないときに、最初の管理者を登録する。同じメールの利用者が既にいれば、有効な管理者にする。有効な管理者がいれば何もせず終了コード1で終わる。メールの形式が違えば終了コード2 |
 | `make ops-login` / `make ops-shell` | gcloud のログイン / ops のコンテナのシェル |
 | `make tf-init` / `make tf-plan` / `make tf-apply` | Terraform |
 | `make tf-output NAME=...` | Terraform の出力値を1つ表示する |

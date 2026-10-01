@@ -104,7 +104,7 @@ docs/design-spec.md 8章のデモデータを投入できるようにしてく�
 
 ## Step 3: API の土台 + 開発用ログイン + 利用者・案件・メンバーの API
 
-Status:
+Status: done 2026-10-01
 
 ```
 docs/02-01_system-design-doc.md の ADR-010・ADR-013、5.1〜5.4・5.8〜5.10、7章(権限マトリクス・その他の設計判断)、8章、11章と、
@@ -236,7 +236,7 @@ docs/02-01_system-design-doc.md の ADR-010・ADR-011・ADR-012・ADR-013、5.2�
 docs/design-spec.md 6.0.5・6.5.1、docs/05_operation-runbook.md 1章(event)に従って、Google のログインと本物のドライブを実装してください。
 
 やること:
-0. apps/api/src/lib/config.ts に GOOGLE_CLIENT_ID・GOOGLE_CLIENT_SECRET・GOOGLE_PICKER_API_KEY・GOOGLE_PROJECT_NUMBER の検証を足す(DRIVE_MODE=google のときだけ必須)
+0. apps/api/src/lib/config.ts に GOOGLE_CLIENT_ID・GOOGLE_CLIENT_SECRET の検証を足す(DRIVE_MODE=google のときだけ必須。GOOGLE_PICKER_API_KEY・GOOGLE_PROJECT_NUMBER は GET /api/config のために Step 3 で足してある)
 1. apps/api/src/auth/: Arctic で Google の OAuth(PKCE・state・一時 Cookie)。
    - GET /api/auth/google/login(returnTo の検証、locale、consent)
    - GET /api/auth/google/callback(mode: login の手順1〜7。判定の順、リフレッシュトークンが返らないときの送り直し、失敗時の wx_login_notice)

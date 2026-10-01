@@ -393,9 +393,9 @@ type ProjectRow = {
 6. `users` を更新(初回は `google_subject`、毎回 `display_name`・`avatar_url`・`last_login_at`、`locale` が空なら `wx_oauth_ctx.locale`)。期限切れのセッションをまとめて消す(掃除)。新しいセッションを作り `wx_session` を返す
 7. 302 で `returnTo`(無ければ `/`)へ
 
-失敗したときは 302 `/login` へ送り、Cookie `wx_login_notice`(JS から読める、SameSite=Lax、Path=/、60秒)に `{ "code": "not_allowed" | "suspended" | "drive_scope_missing" | "cancelled" | "failed", "email"?: string }` を入れる。`cancelled` は Google から `error=access_denied` が返った場合、それ以外の障害は `failed`。ログイン画面はこれを読んで design-spec 6.5.1 の表示を出し、Cookie を消す(メールを URL に載せないため)。
+失敗したときは 302 `/login` へ送り、Cookie `wx_login_notice`(JS から読める、SameSite=Lax、Path=/、60秒。値は JSON を `encodeURIComponent` したもの)に `{ "code": "not_allowed" | "suspended" | "drive_scope_missing" | "cancelled" | "failed", "email"?: string }` を入れる。`cancelled` は Google から `error=access_denied` が返った場合、それ以外の障害は `failed`。ログイン画面はこれを読んで design-spec 6.5.1 の表示を出し、Cookie を消す(メールを URL に載せないため)。
 
-`mode: "reconnect"` の処理: `sub` が `users.google_subject` と違えば `wrong_account`、範囲が足りなければ `scope_missing`、交換に失敗すれば `failed`、`access_denied` なら `cancelled`。成功したら `drive_connections` を連携中に更新して `reconnected`。どの場合も 302 で `returnTo` へ戻し、Cookie `wx_drive_notice`(JS から読める、SameSite=Lax、Path=/、60秒)に `{ "code": ... }` を入れる。画面はこれで design-spec 6.0.5 の通知を出す。
+`mode: "reconnect"` の処理: `sub` が `users.google_subject` と違えば `wrong_account`、範囲が足りなければ `scope_missing`、交換に失敗すれば `failed`、`access_denied` なら `cancelled`。成功したら `drive_connections` を連携中に更新して `reconnected`。どの場合も 302 で `returnTo` へ戻し、Cookie `wx_drive_notice`(JS から読める、SameSite=Lax、Path=/、60秒。値は `wx_login_notice` と同じ形式)に `{ "code": ... }` を入れる。画面はこれで design-spec 6.0.5 の通知を出す。
 
 **`POST /api/auth/logout`** → 204。セッションの行を消し、`wx_session` を消す。
 
@@ -653,7 +653,7 @@ type ProjectRow = {
 
 **`POST /api/admin/users`** 本文 `{ "email": "tanaka@example.com", "admin": false }` → 201 `{ "user": ...GET の1件 }`
 
-- メールは前後の空白を除き小文字にする。登録済みなら 409 `EMAIL_TAKEN`
+- メールは前後の空白を除き小文字にする。空・形式が違う・254文字を超えるときは 422 `VALIDATION_FAILED`(`fields.email` は `required` / `invalid_format` / `too_long`)。登録済みなら 409 `EMAIL_TAKEN`
 
 **`PATCH /api/admin/users/:userId`** 本文 `{ "status": "suspended" }` または `{ "globalRole": "admin" }` → 200 `{ "user": ... }`
 
@@ -667,9 +667,9 @@ type ProjectRow = {
 |---------------|------|------|
 | `GET /api/healthz` | 不要 | 200 `{ "status": "ok", "version": "..." }`。DB を見ない(Cloud Run の起動プローブとアップタイムチェック用。サーバーレス NEG には LB のヘルスチェックを付けられない) |
 | `GET /api/readyz` | 不要 | DB に `SELECT 1` して 200 / 503 |
-| `POST /api/client-errors` | 不要 | 画面の想定外のエラーを送る(ログイン画面・エラー画面からも送れるように認証を求めない。セッションがあれば利用者 ID を記録する)。本文 `{ "message": string, "stack"?: string, "path": string }`。204。記録するときは `path` から検索パラメーターを落とし、`message` は500文字、`stack` は4000文字で切る(7章「ログ」) |
-| `GET /api/dev/users` | 不要 | 開発用ログインの利用者一覧。一度でもログインした(Google アカウントの ID がある)利用者だけを返す(未ログインの利用者は、ドライブ連携の記録が無いので選べない)。`DEV_LOGIN_ENABLED=true` のときだけルートを登録する |
-| `POST /api/dev/login` | 不要 | 本文 `{ "email": "yamada@example.com" }` → 204。セッションを作る。`drive_connections` は更新しない(design-spec 8章)。停止中の利用者は本物のログインと同じく `wx_login_notice`(`suspended`)を入れて 401 `ACCOUNT_SUSPENDED`。同上 |
+| `POST /api/client-errors` | 不要 | 画面の想定外のエラーを送る(ログイン画面・エラー画面からも送れるように認証を求めない。セッションがあれば利用者 ID を記録する)。本文 `{ "message": string, "stack"?: string, "path": string }`。204。記録するときは `path` から検索パラメーターを落として500文字、`message` は500文字、`stack` は4000文字で切る(7章「ログ」) |
+| `GET /api/dev/users` | 不要 | 開発用ログインの利用者一覧。一度でもログインした(Google アカウントの ID がある)利用者だけを返す(未ログインの利用者は、ドライブ連携の記録が無いので選べない)。停止中の利用者も含める。200 `{ "users": [ { "id", "email", "displayName", "globalRole", "status" } ] }`(メール順)。`DEV_LOGIN_ENABLED=true` のときだけルートを登録する |
+| `POST /api/dev/login` | 不要 | 本文 `{ "email": "yamada@example.com" }` → 204。セッションを作る。`drive_connections` は更新しない(design-spec 8章)。停止中の利用者は本物のログインと同じく `wx_login_notice`(`suspended`)を入れて 401 `ACCOUNT_SUSPENDED`。ログインしたことがない利用者(Google アカウントの ID が無い)・登録されていないメール・形式が違うメールは 404 `NOT_FOUND`。最終ログインは更新する。`DEV_LOGIN_ENABLED=true` のときだけルートを登録する |
 | `POST /api/dev/drive/grant` | 要 | 本文 `{ "fileId": "..." }` → 204。ドライブの模擬で、そのファイルを呼んだ利用者の「アプリが使えるファイル」にする(模擬のファイル選択画面で選んだときに画面が呼ぶ。design-spec 8章)。`DRIVE_MODE=mock` のときだけルートを登録する |
 
 `NODE_ENV=production` で `DEV_LOGIN_ENABLED=true` または `DRIVE_MODE=mock` なら、API は起動しない(誤って本番で開発用ログインや模擬を開けないため)。
@@ -791,7 +791,7 @@ export const sessions = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     expiresAt: tz("expires_at").notNull(),
     createdAt: tz("created_at").notNull().defaultNow(),
-    lastUsedAt: tz("last_used_at").notNull().defaultNow(),
+    lastUsedAt: tz("last_used_at").notNull().defaultNow(), // 延長した日時。毎回は更新しない
   },
   (t) => [
     index("sessions_user_id_idx").on(t.userId),
@@ -1020,6 +1020,7 @@ export const documentTags = pgTable(
 - ✕(未認証)は 401 `UNAUTHENTICATED`。停止中の利用者のセッションで来たリクエストは、どれも 401 `ACCOUNT_SUSPENDED` を返し、そのセッションを消し、Cookie `wx_login_notice` に `{ "code": "suspended" }` を入れる(ログイン画面が停止の表示を出す。design-spec 6.0.2)
 - 不参加・削除済みの案件は 404 `PROJECT_NOT_FOUND`(403 にしない。案件があるかどうかを漏らさない。design-spec 6.0.2「理由は区別しない」)
 - 系列・版の ID で呼ぶエンドポイントは、その系列の案件で上の表を当てる。判定の順: 系列・版が存在しない → 404 `DOCUMENT_NOT_FOUND`。存在するがその案件に参加していない・案件が削除済み → 404 `PROJECT_NOT_FOUND`。参加しているが系列・版が削除済み → 404 `DOCUMENT_NOT_FOUND`。役割が足りない → 403 `ROLE_INSUFFICIENT`
+- 判定の順は、認証(401)、案件・系列の存在と参加(404)、役割(403)、入力の検証(422)。本文とクエリの型の不一致(必須項目の欠落、型違い)は Elysia のスキーマ検証が認可より先に拾うので 422 になりうる(案件があるかどうかは漏れない)
 - 参考資料・参考にした資料(`RelatedItem`)で `no_access`・`deleted` の行は、名前・案件名・版番号・ID を返さない
 - 参考資料として新しく選べるのは、参加している、削除されていない案件の、削除されていない版だけ(`REFERENCE_UNAVAILABLE`)
 
@@ -1080,12 +1081,13 @@ export const documentTags = pgTable(
 - `code` は安定した識別子。画面はこれで文言を選ぶ(翻訳ファイル)。`message` は開発者向けの英語で、画面には出さない
 - 例外: Cloud Armor のレート制限の 429 は LB が返すので、本文がこの形(JSON)にならない。画面は HTTP 429 を `RATE_LIMITED` として扱う
 - `details` はコードごとに決まった形(下の表)
+- `VALIDATION_FAILED` はスキーマ検証の失敗でも返す。JSON が壊れていれば `fields.body = invalid_format`、必須項目の欠落は `fields.{項目} = required`、型の不一致は `fields.{項目} = invalid_format`(入れ子は `.` でつなぐ)。値は返さない
 
 | code | HTTP | design-spec 6.0.2 の分類 | details | 起きる例 |
 |------|------|------------------------|---------|---------|
 | `UNAUTHENTICATED` | 401 | (6.0.7 セッション切れ) | — | セッションが無い・期限切れ |
 | `ACCOUNT_SUSPENDED` | 401 | 権限がない(停止) | — | 停止された |
-| `CSRF_REJECTED` | 403 | 通信・その他 | — | `Origin` の不一致 |
+| `CSRF_REJECTED` | 403 | 通信・その他 | — | `Origin` の不一致、本文が JSON でない |
 | `ROLE_INSUFFICIENT` | 403 | 権限がない(役割) | — | 役割が足りない |
 | `ADMIN_REQUIRED` | 403 | 権限がない(管理者) | — | 管理者でない |
 | `PROJECT_NOT_FOUND` | 404 | 見つからない(案件) | — | 案件が無い・削除済み・不参加 |
@@ -1128,7 +1130,7 @@ export const documentTags = pgTable(
 
 ### ログとの対応
 
-- ロードバランサーが付ける `X-Cloud-Trace-Context`(無ければ乱数)からリクエスト ID を作り、応答ヘッダー `X-Request-Id` とすべてのログ行(`logging.googleapis.com/trace`)に入れる。Cloud Logging で LB のログとアプリのログがつながる
+- ロードバランサーが付ける `X-Cloud-Trace-Context`(無ければ乱数)からリクエスト ID を作り、応答ヘッダー `X-Request-Id` とすべてのログ行に入れる。ログ行の `logging.googleapis.com/trace` は `projects/{GCP_PROJECT_ID}/traces/{リクエスト ID}` で、Cloud Logging で LB のログとアプリのログがつながる。`GCP_PROJECT_ID` が空(ローカル)のときは `logging.googleapis.com/trace` を出さない
 - ログのレベルと項目は `docs/05_operation-runbook.md` 1章
 - 画面の通知には出さないが、失敗の通知の詳細(開発者向け)にリクエスト ID を持たせ、問い合わせのときに照合できるようにする
 

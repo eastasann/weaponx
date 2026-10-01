@@ -1,6 +1,12 @@
 import { createApp } from "./app";
+import { createDb } from "./db/client";
 import { loadConfig } from "./lib/config";
+import { createLogger } from "./lib/logger";
 
 const config = loadConfig();
-createApp(config).listen(config.port);
-console.log(JSON.stringify({ severity: "INFO", message: "api started", port: config.port }));
+const logger = createLogger({ level: config.logLevel, gcpProjectId: config.gcpProjectId });
+const { db } = createDb(config.databaseUrl);
+
+// 本文の上限は画面の入力(最大でも数KB)に対して十分大きく、巨大な本文でメモリを使わせないための値
+createApp({ config, db, logger }).listen({ port: config.port, maxRequestBodySize: 1024 * 1024 });
+logger.info("api started", { event: "startup", port: config.port });
