@@ -11,15 +11,18 @@ const runbook = readFileSync(
   new URL("../../../docs/05_operation-runbook.md", import.meta.url),
   "utf8",
 );
-const [appCreatedSql, changeNoteSql] = (
-  runbook.split("### KPI の測り方")[1]?.match(/```sql\n([\s\S]*?)```/)?.[1] ?? ""
-)
+const kpiQueries = (runbook.split("### KPI の測り方")[1]?.match(/```sql\n([\s\S]*?)```/)?.[1] ?? "")
   .split(";")
   .map((s) => s.trim())
   .filter((s) => s.replace(/^--.*$/gm, "").trim() !== "");
+// 取り出しに失敗したまま空のクエリで流すと結果が null になり、「割合は null」の確認が素通りするので、ここで止める
+if (kpiQueries.length !== 2) {
+  throw new Error(`05 運用 Runbook 6章の KPI の SQL は2本のはずが ${kpiQueries.length} 本だった`);
+}
+const [appCreatedSql, changeNoteSql] = kpiQueries as [string, string];
 
-async function pct(query: string | undefined): Promise<string | null> {
-  const rows = await ctx.sql.unsafe(query ?? "");
+async function pct(query: string): Promise<string | null> {
+  const rows = await ctx.sql.unsafe(query);
   return (Object.values(rows[0] ?? {})[0] as string | null) ?? null;
 }
 
@@ -71,7 +74,13 @@ describe("KPI の SQL(05 運用 Runbook 6章)", () => {
     });
     expect(linked.status).toBe(201);
     // 削除された版も記録した事実は変わらないので、分母に残る
-    await ctx.call("DELETE", `/api/documents/${linked.json.document.id}`, { cookie });
+    const removed = await ctx.call("DELETE", `/api/documents/${linked.json.document.id}`, {
+      cookie,
+    });
+    expect(removed.status).toBe(200);
+    const [row] =
+      await ctx.sql`select deleted_at from documents where id = ${linked.json.document.id}`;
+    expect(row?.deleted_at).not.toBeNull();
     expect(await pct(appCreatedSql)).toBe("66.7");
     expect(await pct(changeNoteSql)).toBe("33.3");
   });

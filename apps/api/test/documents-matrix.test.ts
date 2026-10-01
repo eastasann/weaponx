@@ -183,6 +183,37 @@ describe("資料のエンドポイントの権限マトリクス", () => {
     }
   }
 
+  test("ドライブ連携が有効なら、閲覧者のメタデータの取り直しと、不参加の人のドライブの API が通る", async () => {
+    // 上の表は田中・新規の人の連携が有効でない状態でしか ○ のセルを叩いていないので、成功する場合をここで確かめる
+    const viewer = await cookieFor("viewer");
+    const outsider = await cookieFor("outsider");
+    await ctx.db
+      .update(schema.driveConnections)
+      .set({ status: "active" })
+      .where(eq(schema.driveConnections.userId, await ctx.userId(USERS.tanaka)));
+    await ctx.db.insert(schema.driveConnections).values({
+      userId: await ctx.userId(USERS.newcomer),
+      status: "active",
+      credentials: "demo:dummy:dummy:dummy",
+      grantedScopes: ["openid", "email", "profile", "https://www.googleapis.com/auth/drive.file"],
+      connectedAt: new Date(),
+    });
+    const project = await ctx.projectId("A社 DX提案");
+    const refresh = await ctx.call("POST", `/api/projects/${project}/metadata-refresh`, {
+      cookie: viewer,
+    });
+    expect(refresh.status).toBe(200);
+    const token = await ctx.call("POST", "/api/drive/picker-token", { cookie: outsider });
+    expect(token.status).toBe(200);
+    // 案件の役割とは無関係に、呼んだ人自身がまだ使えないファイルなので 422
+    const info = await ctx.call("POST", "/api/drive/file-info", {
+      cookie: outsider,
+      body: { fileId: "seed-survey" },
+    });
+    expect(info.status).toBe(422);
+    expect(info.json.error.code).toBe("DRIVE_FILE_NOT_ACCESSIBLE");
+  });
+
   test("入力の検証より先に認可を確かめる(不正な入力でも 404 / 403)", async () => {
     const project = await ctx.projectId("A社 DX提案");
     const series = await ctx.seriesId("提案書 v3");
