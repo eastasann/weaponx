@@ -1,4 +1,102 @@
 {
-  "app": { "name": "weaponx" },
-  "home": { "tagline": "Record every document as you create it, per project" }
+  "app": { "name": "weaponx", "tagline": "See how documents connect and which is the latest" },
+  "common": {
+    "close": "Close",
+    "cancel": "Cancel",
+    "documentCount_one": "{{count}} document",
+    "documentCount_other": "{{count}} documents",
+    "loading": "Loading"
+  },
+  "header": {
+    "userMenu": "User menu",
+    "language": "Language",
+    "languageJa": "日本語",
+    "languageEn": "English",
+    "adminUsers": "User management",
+    "logout": "Log out"
+  },
+  "reauth": {
+    "banner": "Your Drive connection has expired",
+    "action": "Reconnect"
+  },
+  "notice": {
+    "drive": {
+      "reconnected": "Reconnected to Drive",
+      "cancelled": "Could not connect. If you revoked access, please try again. If your organization restricts external apps, you cannot use this app.",
+      "failed": "Could not connect. Please try again.",
+      "wrong_account": "Please connect with the account you are logged in with ({{email}}).",
+      "scope_missing": "Not all required permissions were granted. Please connect again and allow all permissions."
+    },
+    "locale": "Could not save the display language. Please try again.",
+    "requestId": "Request ID: {{id}}"
+  },
+  "login": {
+    "button": "Log in with Google",
+    "hint": "We also ask for permission to create documents in Drive and read their names",
+    "language": "Language",
+    "notice": {
+      "not_allowed": "This account ({{email}}) is not allowed to use this app. Please contact an administrator.",
+      "suspended": "This account is suspended. Please contact an administrator.",
+      "drive_scope_missing": "Drive permission is required. Please log in again and allow all items.",
+      "cancelled": "Could not log in. If you revoked access, please try again. If your organization restricts external apps, you cannot use this app.",
+      "failed": "Could not log in. Please try again."
+    },
+    "dev": {
+      "title": "Development login",
+      "hint": "Choose a user to log in as. Not shown in production.",
+      "empty": "No user has logged in yet",
+      "suspended": "Suspended",
+      "admin": "Admin"
+    }
+  },
+  "errorPage": {
+    "notFound": "Page not found",
+    "unexpected": "Something went wrong. Please try again later.",
+    "toHome": "Go to Home",
+    "toLogin": "Go to login"
+  },
+  "errors": {
+    "loadFailed": "Could not load",
+    "reload": "Reload",
+    "UNAUTHENTICATED": "Please log in.",
+    "ACCOUNT_SUSPENDED": "This account is suspended. Please contact an administrator.",
+    "CSRF_REJECTED": "Could not save. Please try again",
+    "ROLE_INSUFFICIENT": "Your role has changed, so you can no longer do this",
+    "ADMIN_REQUIRED": "You do not have permission to open this page",
+    "PROJECT_NOT_FOUND": "This project was not found, or you are not a member",
+    "DOCUMENT_NOT_FOUND": "This document was deleted or could not be found",
+    "MEMBER_NOT_FOUND": "This member has already been removed",
+    "NOT_FOUND": "Not found",
+    "VALIDATION_FAILED": "Please check your input",
+    "DUPLICATE_LINK": "This project already has a document with the same link: {{name}}",
+    "REFERENCE_UNAVAILABLE": "Reference \"{{name}}\" was removed because it was deleted or is no longer visible",
+    "TARGET_PROJECT_UNAVAILABLE": "Cannot add to this project",
+    "LAST_OWNER": "At least one owner is required",
+    "LAST_ADMIN": "At least one administrator is required",
+    "ALREADY_MEMBER": "{{name}} is already a member",
+    "USER_SUSPENDED": "{{name}} is suspended and cannot be invited",
+    "EMAIL_TAKEN": "This email address is already registered",
+    "SELF_CHANGE_FORBIDDEN": "You cannot change yourself",
+    "DRIVE_REAUTH_REQUIRED": "Your Drive connection has expired",
+    "DRIVE_FILE_NOT_ACCESSIBLE": "Select the file in the Drive file picker so the app can read its name and copy it.",
+    "DRIVE_SOURCE_UNAVAILABLE": "The original document was not found or you do not have permission to open it, so it cannot be copied.",
+    "DRIVE_CREATE_FAILED": "Could not create the document in Drive. Please try again.",
+    "DRIVE_CREATED_NOT_REGISTERED": "The document was created in Drive, but could not be registered.",
+    "RATE_LIMITED": "Could not save. Please try again",
+    "INTERNAL": "Could not save. Please try again",
+    "SERVICE_UNAVAILABLE": "Could not save. Please try again",
+    "fields": {
+      "required": "Please enter a value",
+      "too_long": "Enter {{max}} characters or fewer",
+      "invalid_url": "Enter a link starting with http or https",
+      "invalid_format": "The format is not valid",
+      "too_many": "The limit is {{max}} items",
+      "future_date": "A future date cannot be set",
+      "locked": "This field cannot be changed"
+    }
+  },
+  "table": {
+    "open": "Open",
+    "sortBy": "Sort by {{column}}"
+  }
 }

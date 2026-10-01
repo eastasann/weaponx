@@ -32,6 +32,7 @@ Compose のサービス(`compose.yaml`):
 | `api` | `docker/dev.Dockerfile`(`oven/bun` ベース) | `apps/api/scripts/dev.ts` 経由で `bun --watch` を起動する(`WATCH_POLLING=true` のときは同じスクリプトがポーリングで変更を検知して再起動する)。:3000 |
 | `web` | 同上 | Vite の開発サーバー。:5173。`/api` を `api:3000` へ転送 |
 | `tools` | 同上 | 依存のインストール・テスト・Lint・マイグレーションなどの単発コマンド。Dev Container もここにつなぐ |
+| `api-e2e` / `web-e2e` | 上と同じ | E2E 用の API と画面。`e2e` プロファイルのときだけ起動する。テスト用 DB(`weaponx_test`)につなぎ、開発用ログインとドライブの模擬で動く。画面のオリジンは `http://web-e2e:5173` |
 | `e2e` | `mcr.microsoft.com/playwright`(Node.js 入り) | Playwright。`e2e` プロファイルのときだけ起動。レポートは :9323 |
 | `ops` | `docker/ops.Dockerfile`(`google/cloud-sdk` + Terraform + openssl) | インフラ作業用。`ops` プロファイルのときだけ起動。gcloud の認証情報は名前付きボリュームに保存 |
 
@@ -70,11 +71,12 @@ weaponx/
 │   └── web/                  # React(Vite)
 │       ├── src/
 │       │   ├── routes/       # TanStack Router のルート
-│       │   ├── features/     # home, project, members, admin, login
-│       │   ├── components/   # ダイアログ、表、通知、タグ入力、参考資料の選択
-│       │   ├── lib/          # api.ts(Eden)、i18n.ts、picker.ts、format.ts
+│       │   ├── features/     # layout(ヘッダー・ユーザーメニュー・要再連携の帯)、login、errors。以降のステップで home, project, members, admin
+│       │   ├── components/   # ダイアログ、表、通知、ボタン、レイアウト(P1〜P3)。以降のステップでタグ入力、参考資料の選択
+│       │   ├── lib/          # api.ts(Eden)、errors.ts(エラーの分類)、session-effects.ts(401・停止・要再連携の共通処理)、queries.ts、i18n.ts、locale.ts、format.ts、cookies.ts、reconnect.ts。以降のステップで picker.ts
 │       │   ├── locales/      # ja.json, en.json
 │       │   └── styles/       # tokens.css(生成物)、index.css
+│       ├── test/setup.ts     # 画面の部品のテストの準備(happy-dom。bunfig.toml が読む)
 │       └── index.html
 ├── packages/
 │   └── shared/               # 画面と API で共有する規則(入力の上限、正規化、リンクの判定、エラーコード)
@@ -95,6 +97,7 @@ weaponx/
 ├── .dockerignore             # API のイメージのビルドに入れないもの
 ├── Makefile
 ├── biome.json
+├── bunfig.toml               # bun test の対象(apps/web は別の実行。7章)
 ├── tsconfig.base.json        # 各ワークスペースの tsconfig が継承する共通設定
 ├── package.json              # Bun のワークスペース
 └── .env.example
@@ -229,13 +232,15 @@ OAuth 同意画面・Drive API・Picker API の有効化は、本番の設定(`d
 ## 7. テスト実行
 
 ```bash
-# 単体・結合テスト(テスト用 DB を作り直してから、全ワークスペースの bun test)
+# 単体・結合テスト(テスト用 DB を作り直してから bun test)。画面の部品のテスト(apps/web)は
+# DOM(happy-dom)を全体に登録するので、API・shared のテストとは別の実行になる
 make test
 
-# 特定のファイルだけ
+# 特定のファイルだけ(apps/web のファイルを指すと画面の部品のテストだけを流す)
 make test ARGS="apps/api/test/documents.test.ts"
 
-# E2E(Playwright。DB・API・画面をテスト用の設定で起動して流す)
+# E2E(Playwright)。テスト用 DB を作り直してデモデータを入れ、api-e2e・web-e2e を起動して流し、終わったら止める。
+# ARGS で特定のファイルだけにできる(例: ARGS="tests/foundation.spec.ts")
 make e2e
 
 # 直前の E2E のレポートとトレースを見る(e2e のコンテナが http://localhost:9323 で配信する)

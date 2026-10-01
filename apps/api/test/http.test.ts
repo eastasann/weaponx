@@ -12,7 +12,7 @@ describe("共通の応答", () => {
     expect(reply.json).toEqual({ status: "ok", version: "test" });
     expect(reply.headers.get("x-request-id")).toMatch(/^[0-9a-f]{32}$/);
     expect(reply.headers.get("x-content-type-options")).toBe("nosniff");
-    expect(reply.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(reply.headers.get("referrer-policy")).toBe("strict-origin");
     expect(reply.headers.get("strict-transport-security")).toContain("max-age");
     expect(reply.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
     expect(reply.headers.get("access-control-allow-origin")).toBeNull();

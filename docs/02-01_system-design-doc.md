@@ -251,7 +251,7 @@ Google のアクセストークン(1時間有効)だけは、インスタンス�
 
 **決定:** ローカルの DB・API・画面・E2E・Lint・マイグレーションは、すべて Docker Compose(`compose.yaml`)の中で動かす。手元に要るのは Docker・make・git だけ。`make` の各ターゲットは `docker compose run` / `exec` を呼ぶ薄いラッパーにする。初回のクラウド設定に使う Terraform と gcloud も、`ops` のコンテナで動かす。VS Code 用に Dev Container の設定(`.devcontainer/`、`tools` のコンテナにつなぐ)を置く。
 
-サービスの構成(`db`・`api`・`web`・`tools`・`e2e`・`ops`)は `docs/03_dev-setup.md` 1章。
+サービスの構成(`db`・`api`・`web`・`tools`・`api-e2e`・`web-e2e`・`e2e`・`ops`)は `docs/03_dev-setup.md` 1章。
 
 **理由:** 利用者の希望。Bun・Node.js・Terraform の版を手元でそろえる手間が無くなり、CI(GitHub Actions)も同じ `make` のターゲットで同じコンテナを使うので、手元と CI の差が出ない。`node_modules` はコンテナ(Linux)用に入るので、エディタの型チェックと Biome はコンテナの中で動かすのが確実で、Dev Container でそれを1クリックにする。
 
@@ -1151,6 +1151,8 @@ export const documentTags = pgTable(
 - 日時: `Intl.DateTimeFormat`、タイムゾーンはブラウザのもの。design-spec 1.2 の書式に合わせる(日本語は `ja-JP` の年月日・時分を2桁、英語は `en-US` の `month: "short"`)
 - 並べ替え: `Intl.Collator(表示言語)`
 - 翻訳しないもの(利用者の入力、Google から取った名前、アプリ名): design-spec 1.2
+- 文言の正: design-spec が文言を定めているもの(失敗の分類、ログイン、再連携の通知など)は design-spec に合わせる。定めが無いもの(開発用ログイン、`errors.fields.*` の汎用文言、API のエラーコードのうち画面に出さないもの)は翻訳ファイルが正
+- 型: `t()` のキーは `ja.json` から型を取る(`apps/web/src/lib/i18next.d.ts`)。日英のキーの一致はテストで確かめる
 - 数字: 件数・日付の見た目は design-spec 4.4 と `docs/06_design-tokens.json` の `semantic.typography.numeric`
 - テスト: 日英の翻訳ファイルのキーが一致することを単体テストで確かめる(10章)
 

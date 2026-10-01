@@ -35,7 +35,7 @@ export function requestState(request: Request): RequestState {
 const SECURITY_HEADERS: Record<string, string> = {
   "strict-transport-security": "max-age=31536000; includeSubDomains",
   "x-content-type-options": "nosniff",
-  "referrer-policy": "no-referrer",
+  "referrer-policy": "strict-origin",
   "content-security-policy": [
     "default-src 'self'",
     "script-src 'self' https://apis.google.com",

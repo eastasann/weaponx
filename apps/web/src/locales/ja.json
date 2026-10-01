@@ -1,4 +1,101 @@
 {
-  "app": { "name": "weaponx" },
-  "home": { "tagline": "案件ごとの資料を、作った時点で記録する" }
+  "app": { "name": "weaponx", "tagline": "資料のつながりと最新版が分かる" },
+  "common": {
+    "close": "閉じる",
+    "cancel": "キャンセル",
+    "documentCount_other": "{{count}}件",
+    "loading": "読み込み中"
+  },
+  "header": {
+    "userMenu": "ユーザーメニュー",
+    "language": "表示言語",
+    "languageJa": "日本語",
+    "languageEn": "English",
+    "adminUsers": "利用者管理",
+    "logout": "ログアウト"
+  },
+  "reauth": {
+    "banner": "ドライブ連携の有効期限が切れました",
+    "action": "もう一度連携する"
+  },
+  "notice": {
+    "drive": {
+      "reconnected": "ドライブに再連携しました",
+      "cancelled": "連携できませんでした。許可を取り消した場合はもう一度お試しください。会社の設定で外部アプリとの連携が制限されている場合は利用できません。",
+      "failed": "連携できませんでした。もう一度お試しください。",
+      "wrong_account": "ログイン中のアカウント({{email}})で連携してください。",
+      "scope_missing": "必要な権限がすべて許可されませんでした。もう一度連携し、すべての権限を許可してください。"
+    },
+    "locale": "表示言語を保存できませんでした。もう一度お試しください。",
+    "requestId": "リクエスト ID: {{id}}"
+  },
+  "login": {
+    "button": "Google でログイン",
+    "hint": "ドライブで資料を作る・資料名を読むための許可もあわせて求めます",
+    "language": "表示言語",
+    "notice": {
+      "not_allowed": "このアカウント({{email}})は利用を許可されていません。管理者に連絡してください。",
+      "suspended": "このアカウントは停止されています。管理者に連絡してください。",
+      "drive_scope_missing": "ドライブの許可が必要です。もう一度ログインし、すべての項目を許可してください。",
+      "cancelled": "ログインできませんでした。許可を取り消した場合はもう一度お試しください。会社の設定で外部アプリとの連携が制限されている場合は利用できません。",
+      "failed": "ログインできませんでした。もう一度お試しください。"
+    },
+    "dev": {
+      "title": "開発用ログイン",
+      "hint": "利用者を選んで入ります。本番では表示されません。",
+      "empty": "ログインしたことのある利用者がいません",
+      "suspended": "停止中",
+      "admin": "管理者"
+    }
+  },
+  "errorPage": {
+    "notFound": "ページが見つかりません",
+    "unexpected": "問題が発生しました。時間をおいてもう一度お試しください。",
+    "toHome": "ホームへ",
+    "toLogin": "ログインへ"
+  },
+  "errors": {
+    "loadFailed": "読み込めませんでした",
+    "reload": "再読み込み",
+    "UNAUTHENTICATED": "ログインが必要です。",
+    "ACCOUNT_SUSPENDED": "このアカウントは停止されています。管理者に連絡してください。",
+    "CSRF_REJECTED": "保存できませんでした。もう一度お試しください",
+    "ROLE_INSUFFICIENT": "役割が変更されたため、この操作はできません",
+    "ADMIN_REQUIRED": "この画面を開く権限がありません",
+    "PROJECT_NOT_FOUND": "この案件は見つからないか、参加していません",
+    "DOCUMENT_NOT_FOUND": "この資料は削除されたか、見つかりません",
+    "MEMBER_NOT_FOUND": "このメンバーはすでに外されています",
+    "NOT_FOUND": "見つかりません",
+    "VALIDATION_FAILED": "入力内容を確認してください",
+    "DUPLICATE_LINK": "この案件には同じリンクの資料がすでにあります: {{name}}",
+    "REFERENCE_UNAVAILABLE": "参考資料『{{name}}』は削除されたか見られなくなったため外しました",
+    "TARGET_PROJECT_UNAVAILABLE": "この案件には追加できません",
+    "LAST_OWNER": "オーナーが1人以上必要です",
+    "LAST_ADMIN": "管理者が1人以上必要です",
+    "ALREADY_MEMBER": "{{name}}さんはすでにメンバーです",
+    "USER_SUSPENDED": "{{name}}さんは停止されているため招待できません",
+    "EMAIL_TAKEN": "このメールアドレスはすでに登録されています",
+    "SELF_CHANGE_FORBIDDEN": "自分自身は変更できません",
+    "DRIVE_REAUTH_REQUIRED": "ドライブ連携の有効期限が切れました",
+    "DRIVE_FILE_NOT_ACCESSIBLE": "ドライブのファイル選択画面で選ぶと、アプリで資料名を読んだりコピーしたりできます。",
+    "DRIVE_SOURCE_UNAVAILABLE": "元の資料が見つからないか、開く権限がないため、コピーできません。",
+    "DRIVE_CREATE_FAILED": "ドライブに資料を作れませんでした。もう一度お試しください。",
+    "DRIVE_CREATED_NOT_REGISTERED": "ドライブに資料は作成されましたが、登録できませんでした。",
+    "RATE_LIMITED": "保存できませんでした。もう一度お試しください",
+    "INTERNAL": "保存できませんでした。もう一度お試しください",
+    "SERVICE_UNAVAILABLE": "保存できませんでした。もう一度お試しください",
+    "fields": {
+      "required": "入力してください",
+      "too_long": "{{max}}文字以内で入力してください",
+      "invalid_url": "http または https で始まるリンクを入力してください",
+      "invalid_format": "形式が正しくありません",
+      "too_many": "上限は{{max}}件です",
+      "future_date": "未来の日時は指定できません",
+      "locked": "この項目は変更できません"
+    }
+  },
+  "table": {
+    "open": "開く",
+    "sortBy": "{{column}}で並べ替え"
+  }
 }

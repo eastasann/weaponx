@@ -893,6 +893,10 @@
     },
     "space": {
       "$type": "dimension",
+      "tight": {
+        "$value": "{primitive.space.1}",
+        "$description": "メニューの項目・チップ・ボタン内の最小の余白"
+      },
       "cell-x": {
         "$value": "{primitive.space.2}",
         "$description": "表のセルの左右"

@@ -263,7 +263,7 @@ docs/design-spec.md 6.0.5・6.5.1、docs/05_operation-runbook.md 1章(event)に�
 
 ## Step 7: 画面の土台(共通UI)+ ログイン・エラー画面
 
-Status:
+Status: done 2026-10-01
 
 ```
 docs/design-spec.md の 1.2(言語と表示の規則)・1.3・3.5・4章・6.0・6.5.1・6.5.7 と、

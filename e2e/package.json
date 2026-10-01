@@ -1,0 +1,11 @@
+{
+  "name": "@weaponx/e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.55.0"
+  }
+}

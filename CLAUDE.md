@@ -24,7 +24,7 @@
 - e2e/: Playwright
 - infra/: Terraform
 - deploy/production/version: 本番で動くべきバージョン
-- docker/、compose.yaml: 開発環境(サービスは db・api・web・tools・e2e・ops)
+- docker/、compose.yaml: 開発環境(サービスは db・api・web・tools・api-e2e・web-e2e・e2e・ops)
 - scripts/: gen-tokens.ts、doc-lint.sh
 - 全体のツリーは docs/03_dev-setup.md 2章
 

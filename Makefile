@@ -42,10 +42,19 @@ test:
 	$(COMPOSE) up -d --wait db
 	$(COMPOSE) exec -T db psql -U weaponx -d postgres -v ON_ERROR_STOP=1 \
 		-c "DROP DATABASE IF EXISTS weaponx_test WITH (FORCE)" -c "CREATE DATABASE weaponx_test OWNER weaponx"
-	$(TOOLS) sh -c 'DATABASE_URL="$$TEST_DATABASE_URL" bun apps/api/scripts/migrate.ts && bun test $(ARGS)'
+	@# 画面の部品のテストは DOM を全体に登録するので、API・shared のテストとは別の実行にする(bunfig.toml)
+	$(TOOLS) sh -c 'DATABASE_URL="$$TEST_DATABASE_URL" bun apps/api/scripts/migrate.ts && \
+		if [ -z "$(ARGS)" ] || [ -n "$(filter-out apps/web/%,$(ARGS))" ]; then bun test $(filter-out apps/web/%,$(ARGS)); fi && \
+		if [ -z "$(ARGS)" ] || [ -n "$(filter apps/web/%,$(ARGS))" ]; then cd apps/web && bun test $(patsubst apps/web/%,%,$(filter apps/web/%,$(ARGS))); fi'
 
 e2e:
-	$(E2E) npx playwright test
+	$(COMPOSE) up -d --wait db
+	$(COMPOSE) exec -T db psql -U weaponx -d postgres -v ON_ERROR_STOP=1 \
+		-c "DROP DATABASE IF EXISTS weaponx_test WITH (FORCE)" -c "CREATE DATABASE weaponx_test OWNER weaponx"
+	$(TOOLS) sh -c 'DATABASE_URL="$$TEST_DATABASE_URL" bun apps/api/scripts/migrate.ts && DATABASE_URL="$$TEST_DATABASE_URL" bun apps/api/scripts/seed.ts'
+	$(COMPOSE) --profile e2e up -d --wait api-e2e web-e2e
+	@$(E2E) npx playwright test $(ARGS); status=$$?; \
+		$(COMPOSE) --profile e2e stop api-e2e web-e2e >/dev/null 2>&1; exit $$status
 
 e2e-report:
 	$(COMPOSE) --profile e2e run --rm --service-ports e2e npx playwright show-report --host 0.0.0.0

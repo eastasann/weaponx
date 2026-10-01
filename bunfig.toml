@@ -1,0 +1,3 @@
+# 画面の部品のテストは DOM を全体に登録する(apps/web/bunfig.toml)。API のテストの fetch を置き換えないよう、別の実行にする
+[test]
+pathIgnorePatterns = ["apps/web/**", "e2e/**", "**/node_modules/**"]
