@@ -179,7 +179,8 @@
     "count_other": "{{count}} documents",
     "olderVersions_one": "{{count}} older version",
     "olderVersions_other": "{{count}} older versions",
-    "emptyHint": "You can create a document here, or register the link of an existing one"
+    "emptyHint": "You can create a document here, or register the link of an existing one",
+    "addDocument": "+ Add document"
   },
   "panel": {
     "label": "Document details",
@@ -199,6 +200,72 @@
     "noAccess": "Document you cannot view",
     "deleted": "Deleted document",
     "projectSuffix": "({{project}})",
-    "versionLatest": "v{{n}} (Latest)"
+    "versionLatest": "v{{n}} (Latest)",
+    "actions": "Actions",
+    "newVersion": "Create new version",
+    "copy": "Create from this",
+    "deleteVersion": "Delete this version"
+  },
+  "filePicker": {
+    "title": "Choose a Drive file",
+    "mockHint": "This is the mock file picker for development.",
+    "empty": "No files to choose from"
+  },
+  "references": {
+    "label": "References",
+    "placeholder": "Search by name…",
+    "candidates": "Reference candidates",
+    "loadFailed": "Couldn't load candidates",
+    "none": "No matching documents",
+    "remove": "Remove {{name}}",
+    "limit": "You can select up to {{max}} references"
+  },
+  "guidance": {
+    "text": "Choose the file in the Drive file picker so the app can read its name and copy it.",
+    "noPermission": "If the file doesn't appear in the picker, you don't have permission to view it. Check the sharing settings in Drive.",
+    "action": "Make this file available to the app"
+  },
+  "addDocument": {
+    "title": "Add document",
+    "tabs": {
+      "create": "Create new",
+      "link": "Register by link"
+    },
+    "kind": "Type",
+    "name": "Name",
+    "driveNote": "The created file is placed at the top level of My Drive. Change its location and sharing in Drive.",
+    "createSubmit": "Create",
+    "addSubmit": "Add",
+    "created": "Document created",
+    "added": "Document added",
+    "openEditor": "Open editor ↗",
+    "openCreatedFile": "Open the created file ↗",
+    "registerByLink": "Register with this link",
+    "url": "Link",
+    "pickFromDrive": "Choose from Drive",
+    "selectExisting": "Select that document",
+    "useDriveName": "Using the name from Drive",
+    "fetchFailed": "Couldn't get the name. Enter it manually.",
+    "reauthFetch": "The Drive connection has expired, so the name can't be retrieved. Enter it manually.",
+    "modifiedAt": "Modified"
+  },
+  "copyDialog": {
+    "copyTitle": "Create from this",
+    "newVersionTitle": "Create new version",
+    "defaultName": "Copy of {{name}}",
+    "source": "Source:",
+    "sourceName": "{{name}} v{{n}} ({{project}})",
+    "target": "Add to project",
+    "changeNote": "Change note",
+    "changeNotePlaceholder": "e.g. Reflect feedback from Company A",
+    "versionCreated": "New version created",
+    "createdIn": "Created in {{project}}",
+    "openCreated": "Open the document in that project"
+  },
+  "deleteVersion": {
+    "title": "Delete version",
+    "message": "Delete \"{{name}}\" (v{{n}}). It is removed from the app's records. The file in its original location is not deleted.",
+    "seriesDeleted": "Document deleted",
+    "deleted": "Version deleted"
   }
 }

@@ -679,6 +679,21 @@ describe("POST /api/dev/drive/grant(ドライブの模擬)", () => {
     expect((await info()).status).toBe(200);
   });
 
+  test("GET /api/dev/drive/files は取得済みの版があるファイルを1件ずつ返す", async () => {
+    const cookie = await ctx.login(USERS.yamada);
+    const reply = await ctx.call("GET", "/api/dev/drive/files", { cookie });
+    expect(reply.status).toBe(200);
+    const files: { fileId: string; name: string; kind: string }[] = reply.json.files;
+    const ids = files.map((file) => file.fileId);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(files.find((file) => file.fileId === "seed-survey")).toEqual({
+      fileId: "seed-survey",
+      name: "調査レポート",
+      kind: "google_doc",
+    });
+    expect((await ctx.call("GET", "/api/dev/drive/files")).status).toBe(401);
+  });
+
   test("版の無いファイルは 404、形式が違えば 422、ログインしていなければ 401", async () => {
     const cookie = await ctx.login(USERS.yamada);
     const unknown = await ctx.call("POST", "/api/dev/drive/grant", {

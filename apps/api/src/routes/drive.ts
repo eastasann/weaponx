@@ -51,17 +51,20 @@ export function driveRoutes(deps: AppDeps) {
 }
 
 function grantRoutes(mock: MockDrive, deps: AppDeps) {
-  return new Elysia({ prefix: "/dev/drive" }).use(authenticated(deps)).post(
-    "/grant",
-    async ({ auth, body, set }) => {
-      if (!isDriveFileId(body.fileId)) throw validationFailed({ fileId: "invalid_format" });
-      // 模擬が値を返せるのは、その版がある(取得済みの)ファイルだけ
-      if (!(await mock.hasFile(body.fileId))) throw new AppError("NOT_FOUND");
-      mock.grant(auth.user.id, body.fileId);
-      set.status = 204;
-    },
-    { body: t.Object({ fileId: t.String() }) },
-  );
+  return new Elysia({ prefix: "/dev/drive" })
+    .use(authenticated(deps))
+    .get("/files", async () => ({ files: await mock.listFiles() }))
+    .post(
+      "/grant",
+      async ({ auth, body, set }) => {
+        if (!isDriveFileId(body.fileId)) throw validationFailed({ fileId: "invalid_format" });
+        // 模擬が値を返せるのは、その版がある(取得済みの)ファイルだけ
+        if (!(await mock.hasFile(body.fileId))) throw new AppError("NOT_FOUND");
+        mock.grant(auth.user.id, body.fileId);
+        set.status = 204;
+      },
+      { body: t.Object({ fileId: t.String() }) },
+    );
 }
 
 /**

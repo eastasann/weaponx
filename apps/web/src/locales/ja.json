@@ -174,7 +174,8 @@
     "deleteMessage": "『{{name}}』を削除します。資料の記録は一覧と検索から消えます。元の場所にあるファイルは消えません。",
     "deleteConfirm": "削除",
     "deleted": "案件を削除しました",
-    "emptyHint": "ここから資料を作るか、既にある資料のリンクを登録できます"
+    "emptyHint": "ここから資料を作るか、既にある資料のリンクを登録できます",
+    "addDocument": "+ 資料を追加"
   },
   "panel": {
     "label": "資料の詳細",
@@ -194,6 +195,72 @@
     "noAccess": "見る権限のない資料",
     "deleted": "削除された資料",
     "projectSuffix": "({{project}})",
-    "versionLatest": "v{{n}}(最新)"
+    "versionLatest": "v{{n}}(最新)",
+    "actions": "操作",
+    "newVersion": "新しい版を作る",
+    "copy": "これを元に作る",
+    "deleteVersion": "この版を削除"
+  },
+  "filePicker": {
+    "title": "ドライブのファイルを選ぶ",
+    "mockHint": "開発用の模擬のファイル選択画面です。",
+    "empty": "選べるファイルがありません"
+  },
+  "references": {
+    "label": "参考資料",
+    "placeholder": "名前で検索…",
+    "candidates": "参考資料の候補",
+    "loadFailed": "候補を読み込めませんでした",
+    "none": "一致する資料がありません",
+    "remove": "{{name}} を外す",
+    "limit": "参考資料は{{max}}件まで選べます"
+  },
+  "guidance": {
+    "text": "ドライブのファイル選択画面で選ぶと、アプリで資料名を読んだりコピーしたりできます。",
+    "noPermission": "ファイル選択画面に出てこない場合は、そのファイルを見る権限がありません。ドライブの共有を確かめてください。",
+    "action": "このファイルをアプリで使えるようにする"
+  },
+  "addDocument": {
+    "title": "資料を追加",
+    "tabs": {
+      "create": "新しく作る",
+      "link": "リンクで登録"
+    },
+    "kind": "種別",
+    "name": "資料名",
+    "driveNote": "作成したファイルはマイドライブ直下に置かれます。置き場所と共有設定は、ドライブで変えてください。",
+    "createSubmit": "作成",
+    "addSubmit": "追加",
+    "created": "資料を作成しました",
+    "added": "資料を追加しました",
+    "openEditor": "編集画面を開く ↗",
+    "openCreatedFile": "作成したファイルを開く ↗",
+    "registerByLink": "このリンクで登録",
+    "url": "リンク",
+    "pickFromDrive": "ドライブから選ぶ",
+    "selectExisting": "この資料を選ぶ",
+    "useDriveName": "ドライブの名前を使います",
+    "fetchFailed": "資料名を取得できませんでした。入力してください。",
+    "reauthFetch": "ドライブ連携の有効期限が切れているため、資料名を取得できません。入力してください。",
+    "modifiedAt": "更新日時"
+  },
+  "copyDialog": {
+    "copyTitle": "これを元に作る",
+    "newVersionTitle": "新しい版を作る",
+    "defaultName": "{{name}} のコピー",
+    "source": "元の資料:",
+    "sourceName": "{{name}} v{{n}}({{project}})",
+    "target": "追加先の案件",
+    "changeNote": "変更メモ",
+    "changeNotePlaceholder": "例: A社の指摘を反映",
+    "versionCreated": "新しい版を作成しました",
+    "createdIn": "{{project}} に作成しました",
+    "openCreated": "その案件の資料を開く"
+  },
+  "deleteVersion": {
+    "title": "版を削除",
+    "message": "『{{name}}』(v{{n}})を削除します。アプリの記録から消えます。元の場所にあるファイルは消えません。",
+    "seriesDeleted": "資料を削除しました",
+    "deleted": "版を削除しました"
   }
 }

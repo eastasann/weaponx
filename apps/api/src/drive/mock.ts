@@ -10,6 +10,8 @@ export type MockDrive = Drive & {
   readonly mode: "mock";
   /** そのファイルを持つ版があるか(`grant` できるのは、そのようなファイルだけ。02-01 5.10) */
   hasFile(fileId: string): Promise<boolean>;
+  /** 模擬のファイル選択画面に並べるファイル(Drive から取得できた版があるファイル。新しく更新された順) */
+  listFiles(): Promise<{ fileId: string; name: string; kind: DocumentKind }[]>;
   /** ファイル選択画面で選んだことにして、そのファイルを `userId` が使えるようにする */
   grant(userId: string, fileId: string): void;
   /** 選んで使えるようにしたファイルをすべて忘れる(シードし直したとき) */
@@ -78,6 +80,23 @@ export function createMockDrive(db: Db): MockDrive {
     mode: "mock",
     async hasFile(fileId) {
       return (await fetchedVersions(fileId).limit(1)).length > 0;
+    },
+    async listFiles() {
+      const rows = await db
+        .select({
+          fileId: t.documents.googleFileId,
+          name: t.documents.name,
+          kind: t.documents.kind,
+        })
+        .from(t.documents)
+        .where(and(isNotNull(t.documents.googleFileId), isNotNull(t.documents.metadataFetchedAt)))
+        .orderBy(desc(t.documents.updatedAt), t.documents.id);
+      const files = new Map<string, { fileId: string; name: string; kind: DocumentKind }>();
+      for (const row of rows) {
+        if (row.fileId && !files.has(row.fileId))
+          files.set(row.fileId, { ...row, fileId: row.fileId });
+      }
+      return [...files.values()];
     },
     grant(userId, fileId) {
       const files = granted.get(userId) ?? new Set<string>();

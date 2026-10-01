@@ -3,11 +3,15 @@ import { createContext, type ReactNode, useCallback, useContext, useMemo, useSta
 import { useTranslation } from "react-i18next";
 import { describeError, toApiError } from "../lib/errors";
 
+type NoticeActionSpec = { label: string; href?: string; onClick?: () => void };
+
 export type Notice = {
   kind: "success" | "error";
   message: string;
   /** 失敗の詳細(問い合わせのときに照合するリクエスト ID。02-01 8章「ログとの対応」) */
   requestId?: string;
+  /** 通知に添えるリンク(「編集画面を開く ↗」など)。`href` は別タブで開き、`onClick` は画面内の移動に使う */
+  actions?: NoticeActionSpec[];
 };
 
 type Entry = Notice & { id: number };
@@ -38,6 +42,29 @@ export function useNotifyError(): (error: unknown, mode?: "read" | "write") => v
         requestId: toApiError(error).requestId,
       }),
     [notify, t],
+  );
+}
+
+function NoticeAction({ action, onDone }: { action: NoticeActionSpec; onDone: () => void }) {
+  const className = "typography-label mt-[var(--space-tight)] block text-link underline";
+  if (action.href) {
+    return (
+      <a href={action.href} target="_blank" rel="noopener noreferrer" className={className}>
+        {action.label}
+      </a>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className={className}
+      onClick={() => {
+        action.onClick?.();
+        onDone();
+      }}
+    >
+      {action.label}
+    </button>
   );
 }
 
@@ -73,6 +100,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           >
             <div className="flex-1">
               <RadixToast.Description>{entry.message}</RadixToast.Description>
+              {entry.actions?.map((action) => (
+                <NoticeAction key={action.label} action={action} onDone={() => remove(entry.id)} />
+              ))}
               {entry.requestId && (
                 <p className="typography-caption mt-[var(--space-tight)] text-text-muted">
                   {t("notice.requestId", { id: entry.requestId })}

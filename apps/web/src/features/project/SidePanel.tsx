@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "../../components/Badge";
+import { Button } from "../../components/Button";
 import { KindIcon } from "../../components/KindIcon";
 import { LoadError } from "../../components/LoadError";
 import { describeError } from "../../lib/errors";
@@ -22,10 +23,22 @@ type SidePanelProps = {
    * (表示した後に版が削除された場合と、開いた時点で URL が古い場合で、画面の動きが違う。design-spec 6.0.2・6.1)
    */
   onMissing: (wasLoaded: boolean) => void;
+  /** 編集者以上のデスクトップ・タブレットだけ、操作の欄を出す(design-spec 6.1) */
+  canEdit: boolean;
+  /** 操作の欄のボタン。ダイアログは呼び出し側が開く */
+  onAction: (action: "newVersion" | "copy" | "delete", version: SelectedVersion) => void;
   /** 「旧版 n件」から開いたとき、読み込めたら版の欄までスクロールする */
   scrollToVersions: boolean;
   onScrolled: () => void;
 };
+
+/** 操作の対象にする版(選んでいる版。「新しい版を作る」は系列の最新版を使う) */
+export type SelectedVersion = SeriesRow["latest"];
+
+/** ドキュメント・スライドで、ドライブのファイルを持つ版だけ、ドライブ上でコピーできる(design-spec 6.1) */
+const canCopy = (version: SelectedVersion) =>
+  (version.kind === "google_doc" || version.kind === "google_slides") &&
+  version.googleFileId !== null;
 
 function userName(user: { displayName: string | null; email: string }) {
   return user.displayName ?? user.email;
@@ -38,6 +51,8 @@ export function SidePanel({
   documentId,
   onClose,
   onMissing,
+  canEdit,
+  onAction,
   scrollToVersions,
   onScrolled,
 }: SidePanelProps) {
@@ -230,6 +245,22 @@ export function SidePanel({
             )}
           </Section>
         </>
+      )}
+
+      {canEdit && head && (
+        <Section title={t("panel.actions")}>
+          <div className="flex flex-wrap gap-[var(--space-inline-gap)]">
+            {canCopy(row.latest) && (
+              <Button variant="primary" onClick={() => onAction("newVersion", row.latest)}>
+                {t("panel.newVersion")}
+              </Button>
+            )}
+            {canCopy(head) && (
+              <Button onClick={() => onAction("copy", head)}>{t("panel.copy")}</Button>
+            )}
+            <Button onClick={() => onAction("delete", head)}>{t("panel.deleteVersion")}</Button>
+          </div>
+        </Section>
       )}
     </section>
   );

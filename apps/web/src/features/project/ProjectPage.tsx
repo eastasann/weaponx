@@ -26,6 +26,9 @@ import {
 import { useDebouncedValue } from "../../lib/use-debounced-value";
 import { useLocale } from "../../lib/use-locale";
 import { useIsMobile } from "../../lib/use-media-query";
+import { AddDocumentDialog, type AddDocumentPrefill } from "../documents/AddDocumentDialog";
+import { CopyDialog, type CopySource } from "../documents/CopyDialog";
+import { DeleteVersionDialog } from "../documents/DeleteVersionDialog";
 import { NameDialog } from "./NameDialog";
 import { SidePanel } from "./SidePanel";
 import { filterSeries, type KindFilter } from "./series-view";
@@ -89,6 +92,11 @@ function ProjectView({
   const filter = useDebouncedValue(filterInput);
   const [kind, setKind] = useState<KindFilter>("all");
   const [scrollToVersions, setScrollToVersions] = useState(false);
+  type DialogState =
+    | { type: "add"; prefill?: AddDocumentPrefill }
+    | { type: "copy" | "newVersion"; source: CopySource }
+    | { type: "delete"; version: { id: string; name: string; versionNo: number } };
+  const [dialog, setDialog] = useState<DialogState | null>(null);
 
   const rows = seriesQuery.data?.series;
   const filtered = useMemo(
@@ -106,8 +114,63 @@ function ProjectView({
   );
   const closePanel = useCallback(() => select({}), [select]);
 
+  const openCopy = (kind: "newVersion" | "copy", version: CopySource & { id?: string }) =>
+    setDialog({ type: kind, source: version });
+
+  const afterCopy = (
+    mode: "copy" | "newVersion",
+    result: {
+      projectId: string;
+      projectName: string;
+      seriesId: string;
+      documentId: string;
+      editUrl: string;
+    },
+  ) => {
+    const editor = { label: t("addDocument.openEditor"), href: result.editUrl };
+    if (mode === "newVersion") {
+      select({ series: result.seriesId, doc: result.documentId });
+      notify({ kind: "success", message: t("copyDialog.versionCreated"), actions: [editor] });
+    } else if (result.projectId === projectId) {
+      select({ series: result.seriesId, doc: result.documentId });
+      notify({ kind: "success", message: t("addDocument.created"), actions: [editor] });
+    } else {
+      notify({
+        kind: "success",
+        message: t("copyDialog.createdIn", { project: result.projectName }),
+        actions: [
+          {
+            label: t("copyDialog.openCreated"),
+            onClick: () =>
+              void navigate({
+                to: "/projects/$projectId",
+                params: { projectId: result.projectId },
+                search: { series: result.seriesId, doc: result.documentId },
+              }),
+          },
+          editor,
+        ],
+      });
+    }
+  };
+
+  const afterDelete = async (result: { seriesRemoved: boolean; latestId: string | null }) => {
+    // 先に表示を移す。削除した版を表示したまま取り直すと、パネルが「見つからない」になる
+    if (result.seriesRemoved || !seriesId || !result.latestId) {
+      closePanel();
+      notify({ kind: "success", message: t("deleteVersion.seriesDeleted") });
+    } else {
+      select({ series: seriesId, doc: result.latestId }, { replace: true });
+      notify({ kind: "success", message: t("deleteVersion.deleted") });
+    }
+    await queryClient.invalidateQueries({ queryKey: ["projects"] });
+    await queryClient.invalidateQueries({ queryKey: ["series"] });
+  };
+
   // URL で指定された系列が無い・削除済みなら、横パネルは開かず表だけを出して知らせる(design-spec 6.1)
-  const missing = seriesId !== undefined && rows !== undefined && !selectedRow;
+  // 取り直している間の表は古いかもしれない(別の案件から移ってきたときなど)ので、取り直しが終わってから判定する
+  const missing =
+    seriesId !== undefined && rows !== undefined && !seriesQuery.isFetching && !selectedRow;
   useEffect(() => {
     if (!missing) return;
     notify({ kind: "error", message: t("errors.DOCUMENT_NOT_FOUND") });
@@ -176,6 +239,8 @@ function ProjectView({
   const proj = project?.project;
   const role = proj?.myRole;
   const canManage = role === "owner" && !isMobile;
+  // 編集者以上・デスクトップとタブレットだけに、変更の操作を出す(design-spec 6.1)
+  const canEdit = role !== undefined && role !== "viewer" && !isMobile;
 
   const columns = [
     {
@@ -239,18 +304,19 @@ function ProjectView({
       <LoadError message={t("project.loadFailed")} onReload={() => void seriesQuery.refetch()} />
     );
   } else if (rows && rows.length === 0) {
-    // 「+ 資料を追加」ボタンは資料を追加ダイアログと一緒に Step 9 で足す
-    list =
-      role !== "viewer" && !isMobile ? (
-        <div className="flex flex-col items-center gap-[var(--space-stack-gap)] p-[var(--space-section-gap)] text-center">
-          <p className="typography-section-heading">{t("project.emptyTitle")}</p>
-          <p className="typography-body text-text-muted">{t("project.emptyHint")}</p>
-        </div>
-      ) : (
-        <p className="typography-body p-[var(--space-section-gap)] text-center text-text-muted">
-          {t("project.emptyViewer")}
-        </p>
-      );
+    list = canEdit ? (
+      <div className="flex flex-col items-center gap-[var(--space-stack-gap)] p-[var(--space-section-gap)] text-center">
+        <p className="typography-section-heading">{t("project.emptyTitle")}</p>
+        <Button variant="primary" onClick={() => setDialog({ type: "add" })}>
+          {t("project.addDocument")}
+        </Button>
+        <p className="typography-body text-text-muted">{t("project.emptyHint")}</p>
+      </div>
+    ) : (
+      <p className="typography-body p-[var(--space-section-gap)] text-center text-text-muted">
+        {t("project.emptyViewer")}
+      </p>
+    );
   } else if (rows && filtered.length === 0) {
     list = (
       <div className="flex flex-col items-center gap-[var(--space-stack-gap)] p-[var(--space-section-gap)] text-center">
@@ -291,6 +357,11 @@ function ProjectView({
           >
             {t("project.members", { count: proj.memberCount })}
           </Link>
+        )}
+        {canEdit && (
+          <Button variant="primary" onClick={() => setDialog({ type: "add" })}>
+            {t("project.addDocument")}
+          </Button>
         )}
         {canManage && proj && <ProjectMenu projectId={projectId} name={proj.name} />}
       </div>
@@ -339,12 +410,74 @@ function ProjectView({
               documentId={documentId}
               onClose={closePanel}
               onMissing={(wasLoaded) => void handleMissing(wasLoaded)}
+              canEdit={canEdit}
+              onAction={(action, version) => {
+                if (action === "delete") {
+                  setDialog({
+                    type: "delete",
+                    version: { id: version.id, name: version.name, versionNo: version.versionNo },
+                  });
+                } else {
+                  openCopy(action, {
+                    documentId: version.id,
+                    name: version.name,
+                    kind: version.kind,
+                    versionNo: version.versionNo,
+                  });
+                }
+              }}
               scrollToVersions={scrollToVersions}
               onScrolled={() => setScrollToVersions(false)}
             />
           ) : null
         }
       />
+      {dialog?.type === "add" && (
+        <AddDocumentDialog
+          key={dialog.prefill?.url ?? "new"}
+          projectId={projectId}
+          {...(dialog.prefill ? { prefill: dialog.prefill } : {})}
+          onClose={() => setDialog(null)}
+          onSelect={(target) => select({ series: target.seriesId, doc: target.documentId })}
+        />
+      )}
+      {(dialog?.type === "copy" || dialog?.type === "newVersion") && selectedRow && (
+        <CopyDialog
+          mode={dialog.type}
+          projectId={projectId}
+          projectName={proj?.name ?? ""}
+          seriesId={selectedRow.id}
+          source={dialog.source}
+          onClose={() => setDialog(null)}
+          onCreated={(result) => afterCopy(dialog.type as "copy" | "newVersion", result)}
+          onRegisterByLink={(failure, name) =>
+            setDialog({
+              type: "add",
+              prefill: {
+                url: failure.url,
+                name,
+                references: [
+                  {
+                    key: dialog.source.documentId,
+                    visibility: "visible",
+                    documentId: dialog.source.documentId,
+                    name: dialog.source.name,
+                    kind: dialog.source.kind,
+                    projectName: null,
+                  },
+                ],
+              },
+            })
+          }
+        />
+      )}
+      {dialog?.type === "delete" && (
+        <DeleteVersionDialog
+          version={dialog.version}
+          onClose={() => setDialog(null)}
+          onDeleted={(result) => void afterDelete(result)}
+        />
+      )}
     </div>
   );
 }

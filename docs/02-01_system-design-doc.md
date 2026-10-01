@@ -675,6 +675,7 @@ type ProjectRow = {
 | `POST /api/client-errors` | 不要 | 画面の想定外のエラーを送る(ログイン画面・エラー画面からも送れるように認証を求めない。セッションがあれば利用者 ID を記録する)。本文 `{ "message": string, "stack"?: string, "path": string }`。204。記録するときは `path` から検索パラメーターを落として500文字、`message` は500文字、`stack` は4000文字で切る(7章「ログ」) |
 | `GET /api/dev/users` | 不要 | 開発用ログインの利用者一覧。一度でもログインした(Google アカウントの ID がある)利用者だけを返す(未ログインの利用者は、ドライブ連携の記録が無いので選べない)。停止中の利用者も含める。200 `{ "users": [ { "id", "email", "displayName", "globalRole", "status" } ] }`(メール順)。`DEV_LOGIN_ENABLED=true` のときだけルートを登録する |
 | `POST /api/dev/login` | 不要 | 本文 `{ "email": "yamada@example.com" }` → 204。セッションを作る。`drive_connections` は更新しない(design-spec 8章)。停止中の利用者は本物のログインと同じく `wx_login_notice`(`suspended`)を入れて 401 `ACCOUNT_SUSPENDED`。ログインしたことがない利用者(Google アカウントの ID が無い)・登録されていないメール・形式が違うメールは 404 `NOT_FOUND`。最終ログインは更新する。`DEV_LOGIN_ENABLED=true` のときだけルートを登録する |
+| `GET /api/dev/drive/files` | 要 | 模擬のファイル選択画面に並べるファイル。200 `{ "files": [ { "fileId", "name", "kind" } ] }`。資料名を Drive から取得できた版(`metadata_fetched_at` に値がある版)があるファイルを、ファイル ID ごとに1件(新しく更新された版の値。更新が新しい順)。呼んだ人の参加や `grant` の状態では絞らない(本物の Picker が利用者のドライブ全体から選ばせるのに合わせた開発用の部品なので、案件に参加していない資料の名前も返る。そのため `DRIVE_MODE=mock` のときだけルートを登録する) |
 | `POST /api/dev/drive/grant` | 要 | 本文 `{ "fileId": "..." }` → 204。ドライブの模擬で、そのファイルを呼んだ利用者の「アプリが使えるファイル」にする(模擬のファイル選択画面で選んだときに画面が呼ぶ。design-spec 8章)。`fileId` の形式が違えば 422 `VALIDATION_FAILED`、取得済みの版が1つも無いファイルは 404 `NOT_FOUND`。`DRIVE_MODE=mock` のときだけルートを登録する |
 
 `NODE_ENV=production` で `DEV_LOGIN_ENABLED=true` または `DRIVE_MODE=mock` なら、API は起動しない(誤って本番で開発用ログインや模擬を開けないため)。
@@ -682,7 +683,7 @@ type ProjectRow = {
 ドライブの模擬(`DRIVE_MODE=mock`)の振る舞い(design-spec 8章):
 
 - 「アプリが使えるファイル」は、利用者が登録した版のうち資料名を Drive から取得できたもの(`metadata_fetched_at` に値がある版)のファイル ID と、ファイル選択画面で選んだファイルの集合。前者は DB の版から導き(シードし直しても API の再起動が要らない)、後者だけを API のメモリに持つ(開発・E2E 専用。1台で動かす)。削除済みの版も数える(登録した人がそのファイルを使えた事実は変わらない)。ファイルの資料名・種別・更新日時は、その版の値を返す(`grant` できるのも、そのような版があるファイルだけ)。要再連携の利用者には認可エラーを返す
-- 画面は `/api/config` の `picker` が `null` のとき、Google Picker の代わりに模擬のファイル選択画面(シードのドライブの資料の一覧)を出し、選んだら `POST /api/dev/drive/grant` を呼ぶ
+- 画面は `/api/config` の `picker` が `null` のとき、Google Picker の代わりに模擬のファイル選択画面(`GET /api/dev/drive/files` の一覧。1ファイルだけを見せる場合はそのファイルだけ)を出し、選んだら `POST /api/dev/drive/grant` を呼ぶ
 - `GET /api/auth/google/reconnect` は、Google へ行かずに `drive_connections.status` を `active` にし、`wx_drive_notice`(`reconnected`)を入れて `returnTo` へ戻す。連携の行が無い利用者は `failed`(模擬には、認可情報を作れる Google が無い)
 
 ---
